@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from dataset import (HipMRIDataset, audit_rows, fingerprint, load_manifest, load_pair,
+from dataset import (HipMRIDataset, audit_rows, fingerprint, inventory, load_manifest, load_pair,
                      normalize, patient_split, read_pairs, read_slice, write_json)
 from synthetic import make_fixture
 
@@ -136,3 +136,12 @@ def test_small_cohort_rejected(fixture):
     _, manifest = fixture
     with pytest.raises(ValueError, match="three patients"):
         patient_split(manifest["rows"][:2])
+
+
+def test_inventory_reports_observed_labels_without_interpreting_them(fixture):
+    path, _ = fixture
+    report = inventory(path.parent)
+    assert report["nifti_count"] == 40
+    masks = [r for r in report["files"] if "_mask" in r["path"]]
+    assert all(r["unique_values_if_at_most_32"] == [0, 2, 5] for r in masks)
+    assert all(r["nonfinite_pixels"] == 0 for r in report["files"])

@@ -274,9 +274,16 @@ def inventory(root):
     items = []
     for path in files:
         nii = nib.load(path)
+        data = nii.get_fdata(dtype=np.float32)
+        finite = np.isfinite(data)
+        values = np.unique(data[finite])
         items.append({"path": str(path.relative_to(root)), "shape": list(nii.shape),
                       "dtype": str(nii.get_data_dtype()),
-                      "spacing": [float(v) for v in nii.header.get_zooms()]})
+                      "spacing": [float(v) for v in nii.header.get_zooms()],
+                      "nonfinite_pixels": int((~finite).sum()),
+                      "min": float(values[0]) if len(values) else None,
+                      "max": float(values[-1]) if len(values) else None,
+                      "unique_values_if_at_most_32": values.tolist() if len(values) <= 32 else None})
     return {"root": str(root.resolve()), "nifti_count": len(items), "files": items,
             "warning": "Unpaired inventory only. Verify patient IDs and label ontology before prepare."}
 
