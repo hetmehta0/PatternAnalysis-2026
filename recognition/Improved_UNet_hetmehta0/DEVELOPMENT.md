@@ -69,3 +69,16 @@ Initial loader suite: **14 passed in 17.87s** on local CPU. Fixtures have 10
 invented patients and 20 invented slices; none is HipMRI. Tests include leakage,
 reused files, changed inputs, noncontiguous/unknown labels, affine/shape errors,
 nonfinite data, fractional labels, volume rejection and constant normalization.
+
+## Day 4 model and workflow milestone
+
+Implemented the standard 2D U-Net baseline, a documented 2D adaptation of the
+Isensee et al. improved U-Net, combined cross-entropy/foreground soft-Dice loss,
+patient-level Dice/IoU aggregation, validation-only checkpoint selection,
+explicit held-out evaluation, original-grid Nifti prediction export, and FP/FN
+panels. A full synthetic CLI run trained, reloaded, evaluated, and exported both
+models. Evaluation and prediction metrics agreed exactly.
+
+Final local suite: **23 passed in 4.50s** on Python 3.12.2, PyTorch 2.14.1,
+macOS arm64 CPU with one thread. The two-epoch CLI smoke used width 2 and 32x32
+inputs. It is execution evidence only and makes no HipMRI performance claim.
