@@ -2,3 +2,17 @@
 __pycache__/
 *.pt
 *.pth
+.pytest_cache/
+*.pyc
+data/
+runs/
+private/
+*.nii
+*.nii.gz
+*.npy
+*.npz
+*.ckpt
+*.safetensors
+*.h5
+*.hdf5
+*.onnx
