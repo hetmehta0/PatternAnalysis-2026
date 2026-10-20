@@ -59,3 +59,13 @@ actual development milestones on 20 October; they do not imply work on separate
 days or independently authored student work. The student must inspect, understand,
 verify and defend this code. No real-data performance claims or tutor check-off
 completion are asserted. No pull request is authorized at this stage.
+
+## Day 3 loader milestone
+
+Implemented an audited, hash-sealed CSV-to-manifest workflow, seeded patient
+partitioning, strict 2D Nifti geometry checks, per-slice normalization, fixed
+one-hot channels, training-only paired flips and a synthetic fixture generator.
+Initial loader suite: **14 passed in 17.87s** on local CPU. Fixtures have 10
+invented patients and 20 invented slices; none is HipMRI. Tests include leakage,
+reused files, changed inputs, noncontiguous/unknown labels, affine/shape errors,
+nonfinite data, fractional labels, volume rejection and constant normalization.

@@ -1,0 +1,6 @@
+# Tested on Python 3.12.2, macOS arm64 CPU. CUDA installation must match Rangpur.
+torch==2.14.1
+numpy==2.5.4
+nibabel==5.4.2
+matplotlib==3.11.2
+pytest==9.1.1
