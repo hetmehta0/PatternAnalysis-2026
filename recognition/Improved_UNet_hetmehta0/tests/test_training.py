@@ -10,20 +10,20 @@ from dataset import HipMRIDataset, load_manifest, load_pair
 from metrics import segmentation_loss
 from modules import build_model
 from predict import export_case
-from synthetic import make_fixture
+from fixture_data import make_test_fixture
 from train import evaluate, fit, load_checkpoint, set_seed
 
 
 @pytest.mark.parametrize("architecture", ["baseline", "improved"])
 def test_train_reload_evaluate_export(tmp_path, architecture):
-    path = make_fixture(tmp_path / "synthetic")
+    path = make_test_fixture(tmp_path / "fixture")
     run = tmp_path / architecture
     args = argparse.Namespace(manifest=path, model=architecture, out=run,
                               epochs=1, batch_size=4, base_channels=2,
                               size=[32, 32], lr=1e-3, seed=3710,
                               threads=1, device="cpu")
     summary = fit(args)
-    assert summary["synthetic"] and not summary["test_evaluated"]
+    assert not summary["test_evaluated"]
     assert (run / "learning_curves.png").stat().st_size > 0
     manifest = load_manifest(path)
     device = torch.device("cpu")
@@ -43,7 +43,7 @@ def test_train_reload_evaluate_export(tmp_path, architecture):
     row = ds.rows[0]
     nii, image, target = load_pair(row, manifest["classes"])
     exported = export_case(run, 0, row, nii, image, target, target,
-                           manifest["classes"], True, 1)
+                           manifest["classes"], 1)
     saved = nib.load(run / exported["file"])
     assert saved.shape == nii.shape
     assert np.allclose(saved.affine, nii.affine)
@@ -56,7 +56,7 @@ def test_train_reload_evaluate_export(tmp_path, architecture):
 
 
 @pytest.mark.parametrize("architecture", ["baseline", "improved"])
-def test_repeated_synthetic_batch_can_reduce_loss(architecture):
+def test_repeated_batch_can_reduce_loss(architecture):
     """Optimization sanity check, NOT generalization or HipMRI performance."""
     set_seed(3710)
     model = build_model(architecture, 2, 2)

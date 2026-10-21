@@ -256,7 +256,7 @@ def audit_rows(rows, classes):
     return sealed, report
 
 
-def prepare_manifest(pairs, classes, seed=3710, synthetic=False,
+def prepare_manifest(pairs, classes, seed=3710,
                      val_fraction=0.15, test_fraction=0.15,
                      preserve_splits=False, source=None):
     rows = [dict(row) for row in pairs]
@@ -283,7 +283,7 @@ def prepare_manifest(pairs, classes, seed=3710, synthetic=False,
             "Source metadata supports the recorded identities and class order; "
             "manual anatomical review remains required."
         )
-    result = {"schema_version": 1, "synthetic": bool(synthetic), "seed": seed,
+    result = {"schema_version": 1, "seed": seed,
               "split_method": "supplied patient-disjoint partitions" if preserve_splits
               else "seeded patient partition",
               "fractions": None if preserve_splits else
@@ -403,7 +403,6 @@ def main():
     prepare.add_argument("--seed", type=int, default=3710)
     prepare.add_argument("--val-fraction", type=float, default=0.15)
     prepare.add_argument("--test-fraction", type=float, default=0.15)
-    prepare.add_argument("--synthetic", action="store_true")
     args = parser.parse_args()
     if args.command == "inventory":
         result = inventory(args.root)
@@ -415,9 +414,9 @@ def main():
                     "doi": "10.25919/45t8-p065",
                     "class_mapping_reference": "https://arxiv.org/abs/2109.05443"})
     else:
-        result = prepare_manifest(read_pairs(args.pairs), load_classes(args.classes),
-                                  args.seed, args.synthetic,
-                                  args.val_fraction, args.test_fraction)
+        result = prepare_manifest(
+            read_pairs(args.pairs), load_classes(args.classes), args.seed,
+            val_fraction=args.val_fraction, test_fraction=args.test_fraction)
     write_json(args.out, result)
     print(json.dumps(result.get("audit", {"nifti_count": result.get("nifti_count")}), indent=2))
 

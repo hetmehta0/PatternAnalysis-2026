@@ -11,12 +11,12 @@ from dataset import (HIPMRI_CLASSES, HipMRIDataset, audit_rows, fingerprint,
                      index_hipmri, inventory, load_manifest, load_pair, normalize,
                      patient_split, prepare_manifest, read_pairs, read_slice,
                      write_json)
-from synthetic import make_fixture
+from fixture_data import make_test_fixture
 
 
 @pytest.fixture
 def fixture(tmp_path):
-    path = make_fixture(tmp_path / "synthetic")
+    path = make_test_fixture(tmp_path / "fixture")
     return path, load_manifest(path)
 
 

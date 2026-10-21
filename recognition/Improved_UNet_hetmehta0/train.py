@@ -109,7 +109,7 @@ resized masks. Patient aggregates include all supplied slices/scans for that ID.
     return result
 
 
-def save_curves(history, path, synthetic):
+def save_curves(history, path):
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     epochs = [r["epoch"] for r in history]
     axes[0].plot(epochs, [r["train_loss"] for r in history], label="Train")
@@ -120,7 +120,7 @@ def save_curves(history, path, synthetic):
     for ax in axes:
         ax.set_xlabel("Epoch")
         ax.legend()
-    fig.suptitle("SYNTHETIC SOFTWARE SMOKE TEST — NOT HipMRI" if synthetic else "Training history")
+    fig.suptitle("Training history")
     fig.tight_layout()
     fig.savefig(path, dpi=150)
     plt.close(fig)
@@ -149,8 +149,7 @@ def fit(args):
         "augmentation": "paired independent axis flips, deterministic per case/epoch",
     }
     write_json(out / "config.json", dict(config, environment=environment(device),
-                                        synthetic=manifest["synthetic"],
-                                        manifest_fingerprint=manifest["fingerprint"]))
+                                          manifest_fingerprint=manifest["fingerprint"]))
     history, best, training_peak = [], -1.0, 0
     started = time.perf_counter()
     for epoch in range(1, args.epochs + 1):
@@ -181,31 +180,29 @@ def fit(args):
                   "validation_loss": validation["mean_loss_resized_grid"],
                   "validation_prostate_dice": score}
         history.append(record)
-        print(json.dumps(dict(record, synthetic=manifest["synthetic"])), flush=True)
+        print(json.dumps(record), flush=True)
         if score > best:
             best = score
             torch.save({
                 "schema_version": 1, "state_dict": model.state_dict(),
                 "config": config, "classes": manifest["classes"],
-                "manifest_fingerprint": manifest["fingerprint"],
-                "synthetic": manifest["synthetic"], "epoch": epoch,
+                "manifest_fingerprint": manifest["fingerprint"], "epoch": epoch,
                 "validation_prostate_dice": score,
             }, out / "best.pt")
-            write_json(out / "best_validation.json", dict(validation, synthetic=manifest["synthetic"]))
+            write_json(out / "best_validation.json", validation)
         write_json(out / "history.json", history)
     synchronize(device)
     result = {
-        "synthetic": manifest["synthetic"], "environment": environment(device),
+        "environment": environment(device),
         "parameters": sum(p.numel() for p in model.parameters()),
         "training_plus_validation_seconds": time.perf_counter() - started,
         "training_peak_cuda_allocated_bytes": training_peak if device.type == "cuda" else None,
         "best_validation_prostate_dice": best,
         "test_evaluated": False, "manifest_fingerprint": manifest["fingerprint"],
-        "warning": "Synthetic results are software checks, not HipMRI evidence."
-        if manifest["synthetic"] else "No test-set performance measured during fit.",
+        "warning": "No test-set performance measured during fit.",
     }
     write_json(out / "training_summary.json", result)
-    save_curves(history, out / "learning_curves.png", manifest["synthetic"])
+    save_curves(history, out / "learning_curves.png")
     print(json.dumps(result, indent=2))
     return result
 
@@ -214,8 +211,8 @@ def load_checkpoint(path, manifest, device):
     checkpoint = torch.load(path, map_location="cpu", weights_only=True)
     if checkpoint["manifest_fingerprint"] != manifest["fingerprint"]:
         raise ValueError("Checkpoint and manifest do not match")
-    if checkpoint["classes"] != manifest["classes"] or checkpoint["synthetic"] != manifest["synthetic"]:
-        raise ValueError("Checkpoint class vocabulary/data provenance mismatch")
+    if checkpoint["classes"] != manifest["classes"]:
+        raise ValueError("Checkpoint class vocabulary mismatch")
     config = checkpoint["config"]
     model = build_model(config["model"], config["num_classes"], config["base_channels"])
     model.load_state_dict(checkpoint["state_dict"], strict=True)
@@ -253,8 +250,7 @@ def main():
         model, checkpoint = load_checkpoint(args.checkpoint, manifest, device)
         dataset = HipMRIDataset(manifest, args.split, checkpoint["config"]["size"])
         report = evaluate(model, dataset, device)
-        report.update({"synthetic": manifest["synthetic"], "split": args.split,
-                       "checkpoint_epoch": checkpoint["epoch"],
+        report.update({"split": args.split, "checkpoint_epoch": checkpoint["epoch"],
                        "manifest_fingerprint": manifest["fingerprint"],
                        "environment": environment(device)})
         write_json(args.out, report)

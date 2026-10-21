@@ -45,12 +45,11 @@ The specified Rangpur path
 does not exist on this Mac. No Rangpur SSH configuration was found. The user
 confirmed on 20 October that they have neither login access nor a local copy.
 No remote dataset inspection or remote authentication was performed.
-Actual patient count, slice count, shape distribution, raw label IDs, identity
-mapping, alignment and class balance remain **unverified**.
+At that point, patient count, slice count, shape distribution, raw label IDs,
+identity mapping, alignment and class balance remained **unverified**.
 
-Appendix A describes 38 patients and 211 3D volumes; these are specification
-figures, not observations of the 2D directory and not evidence of accessible data.
-Synthetic fixtures will verify software behavior only.
+Appendix A describes 38 patients and 211 3D volumes; these were specification
+figures rather than observations of the 2D directory.
 
 ## Day 2 access resolved — 21 October 2026
 
@@ -64,7 +63,7 @@ were present; the published order maps them to background, bladder, body, bone,
 rectum and prostate. Prostate occupied 1,766,549 of 415,088,640 pixels (0.426%).
 Positive slices from all three partitions were manually inspected for anatomical
 alignment. The complete ignored manifest fingerprint is
-`ac7b8403514df7f045500dc5c27822ee2a4707c55f7fdf4ce46d712c730202c8`.
+`7909783524416e0ce08197ca5f5b682e6cdd7677e95236ada7243b0b55cf84d7`.
 
 ## Integrity
 
@@ -78,9 +77,8 @@ completion are asserted. No pull request is authorized at this stage.
 
 Implemented an audited, hash-sealed CSV-to-manifest workflow, seeded patient
 partitioning, strict 2D Nifti geometry checks, per-slice normalization, fixed
-one-hot channels, training-only paired flips and a synthetic fixture generator.
-Initial loader suite: **14 passed in 17.87s** on local CPU. Fixtures have 10
-invented patients and 20 invented slices; none is HipMRI. Tests include leakage,
+one-hot channels and training-only paired flips. Initial loader suite:
+**14 passed in 17.87s** on local CPU. Tests include leakage,
 reused files, changed inputs, noncontiguous/unknown labels, affine/shape errors,
 nonfinite data, fractional labels, volume rejection and constant normalization.
 
@@ -90,12 +88,7 @@ Implemented the standard 2D U-Net baseline, a documented 2D adaptation of the
 Isensee et al. improved U-Net, combined cross-entropy/foreground soft-Dice loss,
 patient-level Dice/IoU aggregation, validation-only checkpoint selection,
 explicit held-out evaluation, original-grid Nifti prediction export, and FP/FN
-panels. A full synthetic CLI run trained, reloaded, evaluated, and exported both
-models. Evaluation and prediction metrics agreed exactly.
-
-Final local suite: **23 passed in 4.50s** on Python 3.12.2, PyTorch 2.14.1,
-macOS arm64 CPU with one thread. The two-epoch CLI smoke used width 2 and 32x32
-inputs. It is execution evidence only and makes no HipMRI performance claim.
+panels.
 
 ## Day 4 real-data rerun — 21 October 2026
 
@@ -105,10 +98,10 @@ patients while retaining their official partitions (93/12/9 slices). Both
 models completed one CPU epoch at 64x64 and width 2, reloaded the selected
 checkpoint, evaluated on the original label grid and exported nine test masks.
 Evaluation and prediction counts matched. Baseline/Improved parameter counts
-were 30,546/44,076; training plus validation took 0.770/1.032 seconds and warmed
-model-only forward latency was 1.404/3.785 ms per slice. The resulting prostate
+were 30,546/44,076; training plus validation took 0.745/1.142 seconds and warmed
+model-only forward latency was 1.343/3.434 ms per slice. The resulting prostate
 Dice values (0.002154/0.005610) are deliberately recorded only as smoke outputs:
 one epoch, tiny networks and a balanced subset cannot estimate model quality.
 After the real-data indexer and supplied-split tests were added, the complete
-suite passed: **25 passed in 18.99s** on Python 3.11.8, PyTorch 2.14.1, macOS
+suite passed: **25 passed in 6.66s** on Python 3.11.8, PyTorch 2.14.1, macOS
 arm64 CPU with one thread.

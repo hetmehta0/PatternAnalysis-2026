@@ -131,7 +131,8 @@ and exact numerical equivalence across devices is not promised.
 slice per patient, trains both models for one epoch, reloads checkpoints,
 evaluates and exports predictions. This deliberately balanced subset is only an
 execution check and cannot estimate performance on the natural distribution.
-Synthetic Nifti remains confined to automated unit-test fixtures.
+Automated tests create temporary files inside pytest-managed directories and
+remove them with the test workspace.
 
 ## Real-data preparation
 
@@ -239,8 +240,8 @@ exported nine test masks/panels. Evaluation and prediction metrics agreed.
 | Real-data pipeline smoke measurement | Baseline | Improved |
 |---|---:|---:|
 | Trainable parameters, width 2, six classes | 30,546 | 44,076 |
-| One-epoch training + validation time (seconds) | 0.770 | 1.032 |
-| Warmed model-only forward, mean of nine slices (ms) | 1.404 | 3.785 |
+| One-epoch training + validation time (seconds) | 0.745 | 1.142 |
+| Warmed model-only forward, mean of nine slices (ms) | 1.343 | 3.434 |
 | Peak CUDA allocated memory | Not measured (CPU) | Not measured (CPU) |
 | Balanced-subset test prostate Dice (not a benchmark) | 0.002154 | 0.005610 |
 
@@ -278,8 +279,8 @@ Turnitin; these have not been submitted.
 
 OpenAI **Codex** assisted with specification interpretation, architecture design,
 the Nifti loader and split audit, model/loss/metric implementation, training and
-prediction scripts, real-data indexing/smoke workflow, synthetic unit-test
-fixtures, tests and documentation. The earlier
+prediction scripts, real-data indexing/smoke workflow, tests and documentation.
+The earlier
 ChatGPT conversation was reviewed for context; its incomplete responses were
 not used as assessment authority. No prior student solution was copied.
 

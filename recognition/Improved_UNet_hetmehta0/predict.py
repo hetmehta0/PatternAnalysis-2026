@@ -14,8 +14,7 @@ from dataset import HipMRIDataset, load_manifest, write_json
 from train import device_from_name, evaluate, load_checkpoint, set_seed
 
 
-def export_case(out, index, row, nii, image, target, prediction, classes,
-                synthetic, max_panels):
+def export_case(out, index, row, nii, image, target, prediction, classes, max_panels):
     # Never use untrusted case IDs as filesystem paths.
     stem = f"case_{index:04d}_{hashlib.sha256(row['case_id'].encode()).hexdigest()[:10]}"
     raw_labels = np.array([c["value"] for c in classes], dtype=np.int16)[prediction]
@@ -47,8 +46,7 @@ def export_case(out, index, row, nii, image, target, prediction, classes,
         for ax, title in zip(axes, ("Input", "Ground truth (all classes)",
                                    "Prediction (all classes)", "Prostate: red FP / blue FN")):
             ax.set_title(title, fontsize=10)
-        prefix = "SYNTHETIC — NOT HipMRI | " if synthetic else ""
-        fig.suptitle(prefix + row["case_id"], fontsize=10)
+        fig.suptitle(row["case_id"], fontsize=10)
         fig.tight_layout()
         fig.savefig(out / f"{stem}_panel.png", dpi=150)
         plt.close(fig)
@@ -75,15 +73,14 @@ def main():
 
     def save(index, row, nii, image, target, prediction):
         exports.append(export_case(out, index, row, nii, image, target, prediction,
-                                   manifest["classes"], manifest["synthetic"], args.max_panels))
+                                   manifest["classes"], args.max_panels))
 
     report = evaluate(model, dataset, device, on_case=save)
-    report.update({"synthetic": manifest["synthetic"], "split": args.split,
-                   "manifest_fingerprint": manifest["fingerprint"], "exports": exports,
+    report.update({"split": args.split, "manifest_fingerprint": manifest["fingerprint"],
+                   "exports": exports,
                    "checkpoint_epoch": checkpoint["epoch"]})
     write_json(out / "metrics.json", report)
-    print(json.dumps({"synthetic": manifest["synthetic"],
-                      "patient_macro": report["patient_macro"],
+    print(json.dumps({"patient_macro": report["patient_macro"],
                       "exported_slices": len(exports)}, indent=2))
 
 

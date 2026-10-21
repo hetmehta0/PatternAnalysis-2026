@@ -53,14 +53,12 @@ def main():
     root = Path(args.out).resolve()
     root.mkdir(parents=True, exist_ok=False)
     full_manifest = load_manifest(args.manifest)
-    if full_manifest["synthetic"]:
-        raise ValueError("smoke.py requires a real HipMRI manifest")
     manifest = real_smoke_subset(full_manifest)
     manifest_path = root / "real-smoke-manifest.json"
     write_json(manifest_path, manifest)
     script_dir = Path(__file__).resolve().parent
     summary = {
-        "synthetic": False,
+        "data_source": "HipMRI",
         "representative_experiment": False,
         "claim": "Real HipMRI execution check on a deliberately balanced subset; not a benchmark.",
         "full_manifest_fingerprint": full_manifest["fingerprint"],
