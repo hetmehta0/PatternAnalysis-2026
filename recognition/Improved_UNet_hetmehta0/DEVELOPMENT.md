@@ -38,7 +38,7 @@ Neither architecture adds true through-plane 3D context. Dice >= 0.75 is a
 target, not an achieved result. Report per-class Dice/IoU, patient-level summaries,
 resource measurements, and 3–5 real failure-case panels before making a recommendation.
 
-## Day 2 access evidence
+## Day 2 initial access evidence — 20 October 2026
 
 The specified Rangpur path
 `/home/groups/comp3710/HipMRI_Study_open/keras_slices_data`
@@ -51,6 +51,20 @@ mapping, alignment and class balance remain **unverified**.
 Appendix A describes 38 patients and 211 3D volumes; these are specification
 figures, not observations of the 2D directory and not evidence of accessible data.
 Synthetic fixtures will verify software behavior only.
+
+## Day 2 access resolved — 21 October 2026
+
+The user downloaded the official HipMRI 2D folders locally. The indexer found
+12,660 paired Nifti slices from 38 patients and preserved the supplied
+train/validation/test partitions: 31/4/3 patients and 11,460/660/540 slices.
+No patient crossed a partition. Every pair passed shape, affine, finite-value
+and known-label checks. There were 12,600 slices shaped 256x128 and 60 training
+slices shaped 256x144, all with recorded in-plane spacing 1.0x1.0. Labels 0–5
+were present; the published order maps them to background, bladder, body, bone,
+rectum and prostate. Prostate occupied 1,766,549 of 415,088,640 pixels (0.426%).
+Positive slices from all three partitions were manually inspected for anatomical
+alignment. The complete ignored manifest fingerprint is
+`ac7b8403514df7f045500dc5c27822ee2a4707c55f7fdf4ce46d712c730202c8`.
 
 ## Integrity
 
@@ -82,3 +96,19 @@ models. Evaluation and prediction metrics agreed exactly.
 Final local suite: **23 passed in 4.50s** on Python 3.12.2, PyTorch 2.14.1,
 macOS arm64 CPU with one thread. The two-epoch CLI smoke used width 2 and 32x32
 inputs. It is execution evidence only and makes no HipMRI performance claim.
+
+## Day 4 real-data rerun — 21 October 2026
+
+The real-data smoke selected, for each patient, two prostate-positive slices and
+one negative slice when available. This produced 114 slices across all 38
+patients while retaining their official partitions (93/12/9 slices). Both
+models completed one CPU epoch at 64x64 and width 2, reloaded the selected
+checkpoint, evaluated on the original label grid and exported nine test masks.
+Evaluation and prediction counts matched. Baseline/Improved parameter counts
+were 30,546/44,076; training plus validation took 0.770/1.032 seconds and warmed
+model-only forward latency was 1.404/3.785 ms per slice. The resulting prostate
+Dice values (0.002154/0.005610) are deliberately recorded only as smoke outputs:
+one epoch, tiny networks and a balanced subset cannot estimate model quality.
+After the real-data indexer and supplied-split tests were added, the complete
+suite passed: **25 passed in 18.99s** on Python 3.11.8, PyTorch 2.14.1, macOS
+arm64 CPU with one thread.

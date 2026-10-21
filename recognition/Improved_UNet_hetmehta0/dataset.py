@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import random
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -16,6 +17,19 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
+
+
+# Published class order for the released pelvis dataset is 1-based; the Nifti
+# masks use the same order shifted to 0..5. Source: Dai et al., CAN3D (2021),
+# https://arxiv.org/abs/2109.05443, Section 4.1.
+HIPMRI_CLASSES = [
+    {"value": 0, "name": "background"},
+    {"value": 1, "name": "bladder"},
+    {"value": 2, "name": "body"},
+    {"value": 3, "name": "bone"},
+    {"value": 4, "name": "rectum"},
+    {"value": 5, "name": "prostate"},
+]
 
 
 def write_json(path, value):
@@ -57,7 +71,7 @@ def validate_classes(classes):
 
 
 def read_pairs(path):
-    """CSV: patient_id,case_id,image,mask. Relative paths resolve beside the CSV."""
+    """CSV: patient_id,case_id,image,mask[,split]. Paths resolve beside the CSV."""
     path = Path(path).resolve()
     with path.open(newline="") as source:
         reader = csv.DictReader(source)
@@ -67,6 +81,8 @@ def read_pairs(path):
         for row in reader:
             entry = {key: row[key].strip() for key in
                      ("patient_id", "case_id", "image", "mask")}
+            if "split" in (reader.fieldnames or []):
+                entry["split"] = row["split"].strip()
             if not all(entry.values()):
                 raise ValueError("Empty patient ID, case ID or file path")
             for key in ("image", "mask"):
@@ -145,11 +161,69 @@ def patient_split(rows, seed=3710, val_fraction=0.15, test_fraction=0.15):
             for r in sorted(rows, key=lambda row: row["case_id"])]
 
 
+def validate_patient_splits(rows):
+    """Require three nonempty partitions and exactly one partition per patient."""
+    owners, present = {}, set()
+    for row in rows:
+        split = row.get("split")
+        if split not in ("train", "validation", "test"):
+            raise ValueError(f"Invalid or missing split for {row['case_id']}")
+        present.add(split)
+        previous = owners.setdefault(row["patient_id"], split)
+        if previous != split:
+            raise ValueError(f"Patient leakage across splits: {row['patient_id']}")
+    if present != {"train", "validation", "test"}:
+        raise ValueError("All three splits must be nonempty")
+
+
+def index_hipmri(root):
+    """Pair the official 2D HipMRI folders and preserve their patient splits."""
+    root = Path(root).resolve()
+    split_names = {"train": "train", "validate": "validation", "test": "test"}
+    pattern = re.compile(r"^(?:case|seg)_(\d+)_week_(\d+)_slice_(\d+)\.nii\.gz$")
+    rows = []
+    for folder_split, split in split_names.items():
+        image_dir = root / f"keras_slices_{folder_split}"
+        mask_dir = root / f"keras_slices_seg_{folder_split}"
+        if not image_dir.is_dir() or not mask_dir.is_dir():
+            raise FileNotFoundError(f"Missing HipMRI folders for {folder_split}: {root}")
+
+        def keyed(paths, prefix):
+            result = {}
+            for path in paths:
+                match = pattern.fullmatch(path.name)
+                if match is None or not path.name.startswith(prefix):
+                    raise ValueError(f"Unexpected HipMRI filename: {path}")
+                key = "_week_".join((match.group(1),
+                                     f"{match.group(2)}_slice_{match.group(3)}"))
+                if key in result:
+                    raise ValueError(f"Duplicate HipMRI key: {key}")
+                result[key] = path.resolve()
+            return result
+
+        images = keyed(sorted(image_dir.glob("*.nii.gz")), "case_")
+        masks = keyed(sorted(mask_dir.glob("*.nii.gz")), "seg_")
+        if not images or images.keys() != masks.keys():
+            missing_masks = sorted(images.keys() - masks.keys())[:5]
+            missing_images = sorted(masks.keys() - images.keys())[:5]
+            raise ValueError(f"Unpaired HipMRI files; missing masks={missing_masks}, "
+                             f"missing images={missing_images}")
+        for key in sorted(images):
+            patient = key.split("_week_", 1)[0]
+            rows.append({"patient_id": f"case_{patient}", "case_id": f"case_{key}",
+                         "image": str(images[key]), "mask": str(masks[key]),
+                         "split": split})
+    validate_rows(rows)
+    validate_patient_splits(rows)
+    return rows
+
+
 def audit_rows(rows, classes):
     """Inspect every pair, count original pixels, and seal file identities."""
     validate_classes(classes)
     validate_rows(rows)
     shapes, counts, spacings = Counter(), Counter(), Counter()
+    split_counts = {split: Counter() for split in ("train", "validation", "test")}
     patient_content = {}
     sealed = []
     for row in rows:
@@ -161,36 +235,60 @@ def audit_rows(rows, classes):
         shapes[str(tuple(image.shape))] += 1
         spacings[str(tuple(float(v) for v in nii.header.get_zooms()[:2]))] += 1
         for index, cls in enumerate(classes):
-            counts[cls["name"]] += int((target == index).sum())
+            pixels = int((target == index).sum())
+            counts[cls["name"]] += pixels
+            if row.get("split") in split_counts:
+                split_counts[row["split"]][cls["name"]] += pixels
         sealed.append(dict(row, image_sha256=file_hash(row["image"]),
                            mask_sha256=file_hash(row["mask"])))
     report = {
         "patients": len({r["patient_id"] for r in rows}), "slices": len(rows),
         "shape_counts": dict(shapes), "in_plane_spacing_counts": dict(spacings),
         "original_pixel_counts": dict(counts),
-        "identity_warning": "Patient IDs and label semantics require human source verification.",
+        "split_original_pixel_counts": {key: dict(value)
+                                        for key, value in split_counts.items()},
+        "identity_warning": (
+            "Patient IDs and label semantics must be supported by source metadata "
+            "and confirmed by manual review."
+        ),
         "alignment": "All pairs passed shape/affine checks; semantic pairing still requires visual review.",
     }
     return sealed, report
 
 
 def prepare_manifest(pairs, classes, seed=3710, synthetic=False,
-                     val_fraction=0.15, test_fraction=0.15):
-    rows, audit = audit_rows(pairs, classes)
-    rows = patient_split(rows, seed, val_fraction, test_fraction)
+                     val_fraction=0.15, test_fraction=0.15,
+                     preserve_splits=False, source=None):
+    rows = [dict(row) for row in pairs]
+    if preserve_splits:
+        validate_patient_splits(rows)
+    else:
+        rows = patient_split(rows, seed, val_fraction, test_fraction)
+    rows, audit = audit_rows(rows, classes)
     audit["splits"] = {
         s: {"patients": len({r["patient_id"] for r in rows if r["split"] == s}),
             "slices": sum(r["split"] == s for r in rows)}
         for s in ("train", "validation", "test")
     }
     # Ensure the optimization and selection labels exist in their partitions.
-    prostate = next(i for i, c in enumerate(classes) if c["name"] == "prostate")
     for split in ("train", "validation", "test"):
-        if not any((load_pair(r, classes)[2] == prostate).any()
-                   for r in rows if r["split"] == split):
+        if audit["split_original_pixel_counts"][split].get("prostate", 0) == 0:
             raise ValueError(f"No prostate pixels in {split}; review patient stratification")
+    if isinstance(source, dict) and source.get("class_mapping_reference"):
+        audit["identity_provenance"] = (
+            "Patient IDs were parsed from the official case filenames; the class "
+            "order is linked in source.class_mapping_reference."
+        )
+        audit["identity_warning"] = (
+            "Source metadata supports the recorded identities and class order; "
+            "manual anatomical review remains required."
+        )
     result = {"schema_version": 1, "synthetic": bool(synthetic), "seed": seed,
-              "fractions": {"validation": val_fraction, "test": test_fraction},
+              "split_method": "supplied patient-disjoint partitions" if preserve_splits
+              else "seeded patient partition",
+              "fractions": None if preserve_splits else
+              {"validation": val_fraction, "test": test_fraction},
+              "source": source,
               "classes": classes, "rows": rows, "audit": audit}
     result["fingerprint"] = fingerprint(result)
     return result
@@ -294,6 +392,10 @@ def main():
     inspect = sub.add_parser("inventory")
     inspect.add_argument("--root", required=True)
     inspect.add_argument("--out", required=True)
+    hipmri = sub.add_parser("prepare-hipmri")
+    hipmri.add_argument("--root", required=True)
+    hipmri.add_argument("--out", required=True)
+    hipmri.add_argument("--seed", type=int, default=3710)
     prepare = sub.add_parser("prepare")
     prepare.add_argument("--pairs", required=True)
     prepare.add_argument("--classes", required=True)
@@ -305,6 +407,13 @@ def main():
     args = parser.parse_args()
     if args.command == "inventory":
         result = inventory(args.root)
+    elif args.command == "prepare-hipmri":
+        result = prepare_manifest(
+            index_hipmri(args.root), HIPMRI_CLASSES, args.seed,
+            preserve_splits=True,
+            source={"name": "Labelled weekly MR images of the male pelvis",
+                    "doi": "10.25919/45t8-p065",
+                    "class_mapping_reference": "https://arxiv.org/abs/2109.05443"})
     else:
         result = prepare_manifest(read_pairs(args.pairs), load_classes(args.classes),
                                   args.seed, args.synthetic,

@@ -1,13 +1,16 @@
 import copy
 import json
+import shutil
 
 import nibabel as nib
 import numpy as np
 import pytest
 import torch
 
-from dataset import (HipMRIDataset, audit_rows, fingerprint, inventory, load_manifest, load_pair,
-                     normalize, patient_split, read_pairs, read_slice, write_json)
+from dataset import (HIPMRI_CLASSES, HipMRIDataset, audit_rows, fingerprint,
+                     index_hipmri, inventory, load_manifest, load_pair, normalize,
+                     patient_split, prepare_manifest, read_pairs, read_slice,
+                     write_json)
 from synthetic import make_fixture
 
 
@@ -145,3 +148,36 @@ def test_inventory_reports_observed_labels_without_interpreting_them(fixture):
     masks = [r for r in report["files"] if "_mask" in r["path"]]
     assert all(r["unique_values_if_at_most_32"] == [0, 2, 5] for r in masks)
     assert all(r["nonfinite_pixels"] == 0 for r in report["files"])
+
+
+def test_official_hipmri_indexer_pairs_prefixes_and_preserves_splits(fixture, tmp_path):
+    _, manifest = fixture
+    root = tmp_path / "HipMRI-2D"
+    source_rows = manifest["rows"][:3]
+    for number, (folder_split, split) in enumerate(
+            (("train", "train"), ("validate", "validation"), ("test", "test")), 4):
+        image_dir = root / f"keras_slices_{folder_split}"
+        mask_dir = root / f"keras_slices_seg_{folder_split}"
+        image_dir.mkdir(parents=True)
+        mask_dir.mkdir(parents=True)
+        key = f"{number:03d}_week_0_slice_0.nii.gz"
+        shutil.copyfile(source_rows[number - 4]["image"], image_dir / f"case_{key}")
+        shutil.copyfile(source_rows[number - 4]["mask"], mask_dir / f"seg_{key}")
+    rows = index_hipmri(root)
+    assert [row["split"] for row in rows] == ["train", "validation", "test"]
+    assert {row["patient_id"] for row in rows} == {"case_004", "case_005", "case_006"}
+    prepared = prepare_manifest(rows, HIPMRI_CLASSES, preserve_splits=True)
+    assert prepared["split_method"] == "supplied patient-disjoint partitions"
+    assert prepared["fractions"] is None
+
+
+def test_official_hipmri_indexer_rejects_missing_pair(fixture, tmp_path):
+    path, _ = fixture
+    root = tmp_path / "HipMRI-2D"
+    for split in ("train", "validate", "test"):
+        (root / f"keras_slices_{split}").mkdir(parents=True)
+        (root / f"keras_slices_seg_{split}").mkdir(parents=True)
+    shutil.copyfile(next(path.parent.glob("*_image.nii.gz")),
+                    root / "keras_slices_train/case_004_week_0_slice_0.nii.gz")
+    with pytest.raises(ValueError, match="Unpaired"):
+        index_hipmri(root)

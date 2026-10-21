@@ -11,11 +11,11 @@ adjacent-organ boundary errors enough to justify its extra computation.
 
 ## Status through Day 4
 
-The Day 1 structure and initial commit were verified and preserved. Days 3–4
-software is implemented and tested locally. Day 2 has a feasibility review and
-audit tooling; **the actual HipMRI inspection is blocked**. The user has no
-Rangpur access or local dataset copy. No actual HipMRI model has been trained
-or evaluated. GPU execution has not been tested.
+The Day 1 structure and initial commit were verified and preserved. Days 2–4
+are now implemented and tested with the downloaded HipMRI 2D data. All 12,660
+image/mask pairs were audited, the supplied patient-disjoint partitions were
+preserved, and both architectures completed a small real-data pipeline smoke.
+Full representative training and GPU execution have not yet been performed.
 
 The authority used was the supplied `COMP3710_Report_2026_draft_v2.3.pdf`
 (its first page labels itself “Version 2.2 Final Assessment Specification”).
@@ -56,7 +56,7 @@ improvements must be demonstrated rather than assumed.
 
 ## One-page feasibility review
 
-**Prepared 20 October 2026. Status: software evidence only; tutor check-off pending.**
+**Updated 21 October 2026. Status: real-data feasibility evidence; tutor check-off pending.**
 
 **User need and scope.** An imaging specialist needs a prototype that drafts
 prostate contours for review. Compare normal-difficulty 2D Improved U-Net with
@@ -81,22 +81,21 @@ and gradient supervision connect course concepts to the architecture. The
 improved model is a 2D adaptation of Isensee et al.; the baseline follows
 Ronneberger et al. Both use cross-entropy plus foreground soft Dice.
 
-**Preliminary evidence.** The local checkout contained the Day 1 commit and
-empty Python placeholders. The Rangpur directory is absent locally; the user
-confirmed no login or dataset copy. Real patient identities, label meanings,
-slice counts, balance and geometry remain unverified. Synthetic Nifti tests
-exercise 10 invented patients and 20 slices, partitioned 8/1/1 patients.
-Both models completed two CPU epochs, checkpoint reload, native-grid evaluation
-and two prediction exports each. At width 2 and 32x32 inputs, baseline/improved
-have 30,537/44,025 parameters; observed mean warmed forward times over two test
-slices were 0.531/1.486 ms. This tiny synthetic timing cannot estimate full
-HipMRI training or GPU performance.
+**Preliminary evidence.** The downloaded data contains 12,660 aligned slice
+pairs from 38 patients. The supplied train/validation/test partitions contain
+31/4/3 patients and 11,460/660/540 slices, with no patient overlap. Every pair
+passed shape, affine and finite-value checks. Labels 0–5 match the published
+order: background, bladder, body, bone, rectum and prostate. Prostate occupies
+1,766,549 of 415,088,640 pixels (0.426%), confirming severe imbalance. Most
+slices are 256x128; 60 training slices are 256x144. Visual checks of positive
+examples from every split showed the label-5 contour aligned with the prostate.
+Both models also completed a one-epoch CPU pipeline check on 114 real slices,
+including checkpoint reload, native-grid evaluation and prediction export.
 
-**Risks, budget and fallback.** Main risks are unavailable data, incorrect
-patient/label mapping, small-cohort variance, resize-related boundary loss and
-2D continuity failures. After access: inventory all files, verify ontology and
-patient mapping with source documentation, visually audit pairs, lock the split,
-then run a small real-data optimization check. Plan one 50-epoch run per model
+**Risks, budget and fallback.** Main risks are small-cohort variance,
+resize-related boundary loss, extreme class imbalance and 2D continuity
+failures. The next experiment is a short representative optimization run on the
+full training partition, followed by one 50-epoch run per model
 at width 16, 256x256, batch 8; measure a real epoch before reserving GPU hours.
 Use the same reduced batch size for both if memory is insufficient. Retain the
 baseline if the improved model lacks meaningful boundary benefit; discuss any
@@ -105,16 +104,19 @@ is justified yet. Present this review at the compulsory practical consultation.
 
 ## Installation and reproducibility
 
-Run from this folder. Tested on Python **3.12.2**, macOS arm64, CPU, one thread.
-Exact direct package versions are in `requirements.txt`; the full tested
-environment is in `requirements-lock.txt`.
+Run from this folder. Tested on Python **3.11.8 and 3.12.2**, macOS arm64, CPU,
+one thread. Exact direct package versions are in `requirements.txt`; a full
+captured test environment is in `requirements-lock.txt`.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m pytest -q
-python smoke.py --out runs/synthetic-smoke
+python dataset.py prepare-hipmri --root /path/to/HipMRI-2D \
+  --out private/hipmri-manifest.json
+python smoke.py --manifest private/hipmri-manifest.json \
+  --out runs/real-smoke
 ```
 
 Use a new output directory on each run: training and prediction refuse to
@@ -125,56 +127,29 @@ CPU is the default; CUDA/MPS must be explicitly requested. Deterministic
 operations are requested; unsupported GPU deterministic operations may fail,
 and exact numerical equivalence across devices is not promised.
 
-`smoke.py` generates synthetic Nifti fixtures, trains both models for two epochs,
-reloads their best checkpoints, evaluates synthetic test patients and exports
-panels and masks. Its tiny width-2/32x32 configuration is **not** the planned
-real-data experiment. Its logs explicitly identify synthetic provenance.
+`smoke.py` deterministically selects two prostate-positive and one negative real
+slice per patient, trains both models for one epoch, reloads checkpoints,
+evaluates and exports predictions. This deliberately balanced subset is only an
+execution check and cannot estimate performance on the natural distribution.
+Synthetic Nifti remains confined to automated unit-test fixtures.
 
-## Real-data preparation once access is available
+## Real-data preparation
 
 Keep data, patient manifests, audits and checkpoints outside Git, or under the
 ignored `private/`, `data/` and `runs/` directories.
 
 ```bash
-python dataset.py inventory \
-  --root /home/groups/comp3710/HipMRI_Study_open/keras_slices_data \
-  --out private/inventory.json
+python dataset.py prepare-hipmri --root /path/to/HipMRI-2D \
+  --out private/hipmri-manifest.json --seed 3710
 ```
 
-The inventory records actual filenames, shapes, spacing, dtype, nonfinite
-counts, intensity range and unique values for files with <=32 distinct values.
-It does **not** assign meanings to raw integers or guess patient identities.
-Confirm those against dataset documentation/tutor guidance.
-
-Create `private/pairs.csv` with columns:
-
-```csv
-patient_id,case_id,image,mask
-```
-
-Supply one row per aligned 2D image/mask pair; `case_id` uniquely identifies a
-slice, while `patient_id` groups **every slice and repeated scan of that person**.
-Relative image/mask paths resolve beside the CSV. Keep these identifiers private.
-Review the correspondence visually, not just lexicographically.
-
-Create `private/classes.json` as an ordered list of objects with integer `value`
-and string `name` fields. The first entry must be `background`, and one entry
-must be `prostate`; include every observed class. **No actual HipMRI raw-label
-mapping is supplied because it has not been verified.** The fixture vocabulary
-0/2/5 is invented and must not be reused as HipMRI metadata.
-
-```bash
-python dataset.py prepare --pairs private/pairs.csv \
-  --classes private/classes.json --out private/manifest.json --seed 3710
-```
-
-The audit checks every pair, raw label, shape and affine; rejects reused paths
-(including symlinks), identical image pixels assigned to different patients,
-and partitions with no prostate pixels. It records raw pixel counts and split
-sizes. Split fractions request 70/15/15; validation/test patient counts are
-floored with a minimum of one each, so actual fractions depend on cohort size.
-Small cohorts may need tutor-approved patient stratification before locking the
-manifest. Never choose a split by its eventual test performance.
+The indexer matches `case_...` images to `seg_...` masks by their shared
+patient/week/slice key. It preserves the supplied folders as train, validation
+and test because the observed patient IDs are disjoint. The audit checks every
+pair, raw label, shape and affine; rejects reused paths, identical image pixels
+assigned to different patients, and partitions with no prostate pixels. Label
+mapping follows Dai et al. (2021): released Nifti values 0–5 correspond to
+background, bladder, body, bone, rectum and prostate.
 
 The manifest includes hashes of all files and its own contents. Train/evaluate/
 predict verify it before use. Checkpoints bind to that exact manifest and class
@@ -217,10 +192,10 @@ regenerating the manifest and a new run.
 Use identical settings and the **same manifest** for both architectures:
 
 ```bash
-python train.py fit --manifest private/manifest.json --model baseline \
+python train.py fit --manifest private/hipmri-manifest.json --model baseline \
   --out runs/baseline --epochs 50 --size 256 256 --batch-size 8 \
   --base-channels 16 --seed 3710 --device cuda
-python train.py fit --manifest private/manifest.json --model improved \
+python train.py fit --manifest private/hipmri-manifest.json --model improved \
   --out runs/improved --epochs 50 --size 256 256 --batch-size 8 \
   --base-channels 16 --seed 3710 --device cuda
 ```
@@ -233,13 +208,13 @@ weights. CUDA reports peak allocated bytes; CPU/MPS report CUDA memory as
 After freezing model choices, evaluate the test set once for final reporting:
 
 ```bash
-python train.py evaluate --manifest private/manifest.json \
+python train.py evaluate --manifest private/hipmri-manifest.json \
   --checkpoint runs/baseline/best.pt --split test \
   --out runs/baseline/test_metrics.json --device cuda
-python train.py evaluate --manifest private/manifest.json \
+python train.py evaluate --manifest private/hipmri-manifest.json \
   --checkpoint runs/improved/best.pt --split test \
   --out runs/improved/test_metrics.json --device cuda
-python predict.py --manifest private/manifest.json \
+python predict.py --manifest private/hipmri-manifest.json \
   --checkpoint runs/improved/best.pt --split test \
   --out runs/improved/predictions --max-panels 5 --device cuda
 ```
@@ -254,25 +229,25 @@ coordinates, not a claimed radiological viewing convention.
 
 ## Observed software verification
 
-The end-to-end CLI smoke completed on 20 October 2026: 10 **synthetic** patients,
-20 slices of shape 33x35x1, split 8/1/1 patients, training size 32x32, base width
-2, three invented labels, seed 3710, batch 4, two epochs, CPU one thread.
-Both models reloaded checkpoints and exported two test masks/panels each.
-Separate evaluation and prediction metrics agreed exactly.
+The end-to-end real-data CLI smoke completed on 21 October 2026. It used 114
+HipMRI slices: two prostate-positive and one negative slice per patient,
+partitioned as 93/12/9 train/validation/test slices across the original 31/4/3
+patients. Inputs were resized to 64x64, base width was 2, batch size was 8 and
+each model ran for one CPU epoch. Both models reloaded their checkpoint and
+exported nine test masks/panels. Evaluation and prediction metrics agreed.
 
-| Synthetic smoke measurement | Baseline | Improved |
+| Real-data pipeline smoke measurement | Baseline | Improved |
 |---|---:|---:|
-| Trainable parameters, width 2, three classes | 30,537 | 44,025 |
-| Two-epoch training + validation time (seconds) | 0.098 | 0.129 |
-| Warmed model-only forward, mean of two slices (ms) | 0.531 | 1.486 |
+| Trainable parameters, width 2, six classes | 30,546 | 44,076 |
+| One-epoch training + validation time (seconds) | 0.770 | 1.032 |
+| Warmed model-only forward, mean of nine slices (ms) | 1.404 | 3.785 |
 | Peak CUDA allocated memory | Not measured (CPU) | Not measured (CPU) |
-| Synthetic test prostate Dice (not HipMRI performance) | 0.154952 | 0.217105 |
+| Balanced-subset test prostate Dice (not a benchmark) | 0.002154 | 0.005610 |
 
-These numbers demonstrate execution only. Two cases, toy shapes and tiny networks
-cannot support a speed comparison or a clinical/model-quality conclusion.
+These numbers demonstrate execution only. One epoch, tiny networks and a
+deliberately balanced subset cannot support a clinical/model-quality conclusion.
 Forward timing excludes I/O, preprocessing and exports. The width-16 models with
-three classes contain 1,940,851 and 2,774,249 parameters, respectively; actual
-counts depend on the verified HipMRI class vocabulary.
+six classes contain 1,940,902 and 2,774,594 parameters, respectively.
 
 Tests cover patient isolation, deterministic partitions, changed files,
 noncontiguous labels, missing/unknown classes, geometry errors, nonfinite
@@ -284,17 +259,18 @@ See `DEVELOPMENT.md` for recorded test runs.
 
 | Required real-data evidence | Status |
 |---|---|
-| Observed patient/slice counts, identities, labels and balance | Blocked by access |
+| Observed patient/slice counts, identities, labels and balance | Complete |
+| Full image/mask shape, affine and finite-value audit | Complete |
 | Baseline vs improved held-out per-class Dice/IoU | Not run |
 | Rangpur training time, peak GPU memory and inference time | Not measured |
-| 3–5 actual apex/base/boundary failure autopsies | Not possible without data |
+| 3–5 actual apex/base/boundary failure autopsies | Not yet completed |
 | Clinical boundary utility/resource recommendation | Deferred until evidence exists |
 | Tutor feasibility check-off | User must attend |
 
-Once data is available, profile one real epoch, verify optimization on a small
+Next, profile one full-partition epoch, verify optimization on a small
 training-only subset, run the controlled comparison, then inspect failure cases.
 Retain test independence during tuning. Do not infer clinical benefit from the
-synthetic figures. The final submission additionally needs completed real
+pipeline-smoke figures. The final submission additionally needs completed real
 experiments, report analysis, a user-authorized upstream PR and README PDF for
 Turnitin; these have not been submitted.
 
@@ -302,14 +278,16 @@ Turnitin; these have not been submitted.
 
 OpenAI **Codex** assisted with specification interpretation, architecture design,
 the Nifti loader and split audit, model/loss/metric implementation, training and
-prediction scripts, synthetic fixtures, tests and documentation. The earlier
+prediction scripts, real-data indexing/smoke workflow, synthetic unit-test
+fixtures, tests and documentation. The earlier
 ChatGPT conversation was reviewed for context; its incomplete responses were
 not used as assessment authority. No prior student solution was copied.
 
 Verification performed by the assistant includes automated negative tests for
 leakage and invalid geometry/labels, hand-derived metric examples, gradient
 checks, repeated-batch optimization, CPU end-to-end runs, checkpoint reload
-consistency and native-label/geometry export tests. These are **assistant-run
+consistency, a complete real-data audit, visual alignment review, real-data
+pipeline smoke, and native-label/geometry export tests. These are **assistant-run
 checks**, not a claim that the student has independently audited the code.
 The student must read, understand, audit and defend every line and every result,
 verify actual metadata and real-data behavior, and update this disclosure with
@@ -322,3 +300,6 @@ one work session and do not imply separate days of independent student authorshi
 2. Ronneberger, Fischer & Brox (2015), [U-Net](https://arxiv.org/abs/1505.04597).
 3. Isensee et al. (2018), [Brain Tumor Segmentation and Radiomics Survival
    Prediction: Contribution to the BRATS 2017 Challenge](https://arxiv.org/abs/1802.10508).
+4. Dai et al. (2021), [CAN3D: Fast 3D Medical Image Segmentation via Compact
+   Context Aggregation](https://arxiv.org/abs/2109.05443).
+5. Dowling & Greer (2021), [Labelled weekly MR images of the male pelvis](https://doi.org/10.25919/45t8-p065).
