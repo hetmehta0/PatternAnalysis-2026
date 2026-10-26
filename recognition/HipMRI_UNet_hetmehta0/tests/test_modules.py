@@ -8,8 +8,7 @@ import pytest
 import torch
 from conftest import PROJECT_DIR
 
-import unet2d_256
-import unet2d_512
+from baselines.unet2d import unet2d_256, unet2d_512
 from losses import DiceCrossEntropyLoss
 from modules import (
     UNET2D_VARIANTS,

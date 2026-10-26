@@ -11,7 +11,8 @@ Thin entry point. The architecture is defined once in ``modules.py``:
 
 The only difference from ``unet2d_512.py`` is the variant name below.
 
-Run ``python unet2d_256.py`` to print a shape check and parameter count.
+Run ``python -m baselines.unet2d.unet2d_256`` from the project directory to print a
+shape check and parameter count.
 """
 
 from __future__ import annotations
