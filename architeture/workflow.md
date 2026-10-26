@@ -1,9 +1,11 @@
 # COMP3710 — HipMRI Segmentation Architecture & Workflow
 
-> **Purpose:** A living implementation plan, design-decision log, and evidence checklist for my COMP3710 MRI segmentation project.
+> **Purpose:** The purpose of this is to ensure I am on track and ensuring I am progressing as quickly while still keeping quality
 >
-> **Research question:** Does incorporating 3D spatial context improve multi-class MRI segmentation compared with a standard 2D U-Net baseline? Does an improved 3D U-Net produce additional improvements worth its computational cost?
+> **Research question:** Does incorporating 3D spatial context improve multi-class MRI segmentation when compared to a standard 2D U-Net segmentation baseline and does and improved 3D U-Net provide enough improvement for the increased computational cost?
 >
+> **Hypothesis**: IF A 3D U-Net uses spatial information from neighbouring MRI slices THEN It may produce more accurate segmentation than a standard 2D U-Net BECAUSE Organs are three-dimensional structures whose cross-sectional shapes and boundaries change across depth. Learning these relationships may help identify anatomical boundaries that are ambiguous in individual 2D slices.
+> 
 > **Status:** Planning document. Tick tasks only when completed and verified; link each milestone to its real commit and evidence. The plan can evolve as experiments are run.
 
 ## 1. Overall workflow
@@ -21,7 +23,7 @@
 
 ### Dataset and task
 - HipMRI volumetric images and segmentation masks (NIfTI).
-- Expected classes: 0–5, six segmentation labels; verify label-name correspondence with dataset documentation.
+- Expected classes: 0–5, six segmentation labels; verify label-name correspondence with dataset documentation. 
 - Known scan shapes include 256 × 256 × 128 and 256 × 256 × 144; voxel spacing varies across scans.
 - Use patient-level train/validation/test splits so different weeks for a patient remain in one split.
 - Define consistent preprocessing, orientation, and full-volume evaluation before comparing architectures.
@@ -31,6 +33,7 @@
 - Output: `[B, 6, H, W]` (logits for six classes).
 - Encoder, bottleneck, decoder, and skip connections.
 - Initial loss candidate: 0.5 Dice + 0.5 Cross-Entropy. Reasoning: balance region overlap with per-pixel class supervision; verify formulas and class handling.
+- This will be baseline and we are planning to improve it. Dice score and cross entropy will be used to see how baseline works. We won't improve this or add stuff like loss functions right now. Just do a base 2D Unet and feed the data to then  record dice score and cross entropy 
 
 ### Standard 3D
 - Input: `[B, 1, D, H, W]` (3D volume/patch).
@@ -38,13 +41,14 @@
 - Replace 2D convolutions, pooling, and upsampling with 3D operations; retain skip connections.
 - Preferred first trial: patch-based 3D training, subject to measured GPU memory and data geometry.
 - Hypothesis: neighbouring slices provide spatial context and improve structure consistency. This is a test, not a guaranteed result.
+- This will become the new baseline for next stage which is improved 3D which uses residual blocks first then add in deep supervision or either or depending how well its performing and then measure once again dice and cross entropy loss and record it 
 
 ### Improved 3D
 - Candidate: residual blocks and/or deep supervision following the chosen reference method.
 - Final modification and supporting literature to be recorded **before** implementation.
 - Compare standard versus improved 3D while controlling data splits and evaluation methodology.
 - Dice 0.75 is an **aspirational diagnostic reference**, not a progression gate; the primary research result is the measured baseline comparison.
-
+- This will be final test to see if our improvements worked. If time persists then we can add in either L1/L2 Regularisation as loss functions or random forests etc to keep improving it 
 ## 3. Implementation and verification checklist
 
 ### A — Data contract
@@ -113,4 +117,4 @@
 
 ## 5. AI-assisted development policy
 
-AI may assist with scaffolding, implementation, tests, debugging, and plots. I remain responsible for inspecting every submitted component, validating the segmentation metrics and split integrity, understanding architectural choices, and drawing conclusions from real evidence. Preserve accurate descriptions of AI contributions; do not fabricate development history or results.
+AI will be used for grunt work. But I am responsible for architectural design, code review any conflicts, understanding model outputs, direction the model should be heading in. I will be in charge of prompting to do the manual code but with my guidance and I will be micromanaging it if it starts going in a different direction. I will be in charge of final report and no AI will be used for that. So only thing AI will be used for is grunt physical coding with my oversight as this takes time. I will not blindly merge or commit 
