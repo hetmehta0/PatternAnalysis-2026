@@ -19,6 +19,8 @@ Sections
     5. Decoder
     6. Skip connections
     7. Complete U-Net model
+    3D U-Net (end of file): the same sections for UNet3D (unet3d_256, unet3d_512),
+    reusing ENCODER_CHANNELS, concatenate_skip and count_parameters
 """
 
 # =============================================================================
@@ -227,3 +229,171 @@ def build_model(variant: str, in_channels: int = 1, num_classes: int = 6) -> UNe
 def count_parameters(model: nn.Module) -> int:
     """Total trainable parameters."""
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+# =============================================================================
+# 3D U-Net (standard; added after the 2D baselines, which are unchanged above)
+# =============================================================================
+# Same design as UNet2D with every layer swapped for its 3D counterpart:
+#
+#     unet3d_256   encoder 32 -> 64 -> 128 -> 256, bottleneck 256
+#     unet3d_512   encoder 32 -> 64 -> 128 -> 256, bottleneck 512
+#
+# Input  : [B, 1, D, H, W] float tensor, D, H and W divisible by 16
+#          (true for the 64^3 and 96^3 training and sliding-window patches).
+# Output : [B, 6, D, H, W] raw logits.
+# ENCODER_CHANNELS, concatenate_skip and count_parameters are shared with 2D.
+
+UNET3D_VARIANTS: dict[str, int] = {
+    "unet3d_256": 256,
+    "unet3d_512": 512,
+}
+
+
+# -----------------------------------------------------------------------------
+# 3D.2 Convolution blocks
+# -----------------------------------------------------------------------------
+class DoubleConv3D(nn.Module):
+    """(Conv 3x3x3 -> BatchNorm3d -> ReLU) x 2, with same padding and no conv bias."""
+
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        super().__init__()
+        self.block = nn.Sequential(
+            nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm3d(out_channels),
+            nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.block(x)
+
+
+# -----------------------------------------------------------------------------
+# 3D.3 Encoder
+# -----------------------------------------------------------------------------
+class EncoderStage3D(nn.Module):
+    """DoubleConv3D, then 2x2x2 max-pool. Returns (pooled, pre-pool skip)."""
+
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        super().__init__()
+        self.conv = DoubleConv3D(in_channels, out_channels)
+        self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        skip = self.conv(x)
+        return self.pool(skip), skip
+
+
+class Encoder3D(nn.Module):
+    """Four encoder stages: in_channels -> 32 -> 64 -> 128 -> 256."""
+
+    def __init__(self, in_channels: int, channels: Sequence[int]) -> None:
+        super().__init__()
+        widths = [in_channels, *channels]
+        self.stages = nn.ModuleList(
+            EncoderStage3D(widths[i], widths[i + 1]) for i in range(len(channels))
+        )
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        skips: list[torch.Tensor] = []
+        for stage in self.stages:
+            x, skip = stage(x)
+            skips.append(skip)
+        return x, skips
+
+
+# -----------------------------------------------------------------------------
+# 3D.4 Bottleneck
+# -----------------------------------------------------------------------------
+class Bottleneck3D(nn.Module):
+    """DoubleConv3D at the lowest resolution (D/16 x H/16 x W/16): 256 -> B channels.
+
+    B is 256 (unet3d_256) or 512 (unet3d_512), the only intended difference.
+    """
+
+    def __init__(self, in_channels: int, bottleneck_channels: int) -> None:
+        super().__init__()
+        self.conv = DoubleConv3D(in_channels, bottleneck_channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.conv(x)
+
+
+# -----------------------------------------------------------------------------
+# 3D.5 Decoder (3D.6 skip connections reuse concatenate_skip from Section 6)
+# -----------------------------------------------------------------------------
+class DecoderStage3D(nn.Module):
+    """2x2x2 transposed-conv upsampling, skip concatenation, then DoubleConv3D."""
+
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        super().__init__()
+        self.up = nn.ConvTranspose3d(in_channels, out_channels, kernel_size=2, stride=2)
+        self.conv = DoubleConv3D(2 * out_channels, out_channels)
+
+    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        upsampled = self.up(x)
+        return self.conv(concatenate_skip(skip, upsampled))
+
+
+class Decoder3D(nn.Module):
+    """Mirror of the encoder: B -> 256 -> 128 -> 64 -> 32."""
+
+    def __init__(self, bottleneck_channels: int, channels: Sequence[int]) -> None:
+        super().__init__()
+        widths = list(reversed(channels))  # [256, 128, 64, 32]
+        inputs = [bottleneck_channels, *widths[:-1]]
+        self.stages = nn.ModuleList(
+            DecoderStage3D(in_ch, out_ch) for in_ch, out_ch in zip(inputs, widths, strict=True)
+        )
+
+    def forward(self, x: torch.Tensor, skips: list[torch.Tensor]) -> torch.Tensor:
+        for stage, skip in zip(self.stages, reversed(skips), strict=True):
+            x = stage(x, skip)
+        return x
+
+
+# -----------------------------------------------------------------------------
+# 3D.7 Complete 3D U-Net model
+# -----------------------------------------------------------------------------
+class UNet3D(nn.Module):
+    """Standard 3D U-Net: encoder, bottleneck, decoder, 1x1x1 output head."""
+
+    def __init__(
+        self,
+        bottleneck_channels: int,
+        in_channels: int = 1,
+        num_classes: int = 6,
+        encoder_channels: Sequence[int] = ENCODER_CHANNELS,
+    ) -> None:
+        super().__init__()
+        self.bottleneck_channels = int(bottleneck_channels)
+        self.num_classes = int(num_classes)
+        self.downsample_factor = 2 ** len(encoder_channels)
+
+        self.encoder = Encoder3D(in_channels, encoder_channels)
+        self.bottleneck = Bottleneck3D(encoder_channels[-1], bottleneck_channels)
+        self.decoder = Decoder3D(bottleneck_channels, encoder_channels)
+        self.head = nn.Conv3d(encoder_channels[0], num_classes, kernel_size=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim != 5:
+            raise ValueError(f"Expected input [B, C, D, H, W], got {tuple(x.shape)}")
+        if any(n % self.downsample_factor for n in x.shape[2:]):
+            raise ValueError(
+                f"Depth, height and width must be divisible by {self.downsample_factor}, "
+                f"got {'x'.join(map(str, x.shape[2:]))}"
+            )
+        x, skips = self.encoder(x)
+        x = self.bottleneck(x)
+        x = self.decoder(x, skips)
+        return self.head(x)
+
+
+def build_model3d(variant: str, in_channels: int = 1, num_classes: int = 6) -> UNet3D:
+    """Build a named variant from ``UNET3D_VARIANTS``."""
+    if variant not in UNET3D_VARIANTS:
+        raise ValueError(f"Unknown variant {variant!r}; choose from {sorted(UNET3D_VARIANTS)}")
+    return UNet3D(UNET3D_VARIANTS[variant], in_channels=in_channels, num_classes=num_classes)
