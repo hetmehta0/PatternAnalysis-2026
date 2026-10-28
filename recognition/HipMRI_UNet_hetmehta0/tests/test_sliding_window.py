@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
+
 import pytest
 import torch
 
@@ -35,7 +37,7 @@ def test_windows_cover_every_position_with_at_least_half_overlap(patch):
             assert 0 <= s <= length - patch
             covered[s : s + patch] = True
         assert covered.all()
-        assert all(b - a <= patch // 2 for a, b in zip(starts, starts[1:], strict=False))
+        assert all(b - a <= patch // 2 for a, b in pairwise(starts))
 
 
 @pytest.mark.parametrize(
@@ -96,3 +98,25 @@ def test_pointwise_model_matches_whole_volume_prediction():
         direct = model(image.unsqueeze(0))[0]
     logits = sliding_window_logits(model, image, (8, 8, 8), num_classes=6, batch_size=4)
     assert torch.allclose(logits, direct, atol=1e-5)
+
+
+@pytest.mark.parametrize("size", [64, 96])
+@pytest.mark.parametrize("shape", [(128, 256, 256), (144, 256, 256)])
+def test_hipmri_volumes_fully_covered(size, shape):
+    """Every voxel of a real-sized volume lies in at least one 50%-overlap window."""
+    count = torch.zeros(shape, dtype=torch.int16)
+    starts = [window_starts(n, size) for n in shape]
+    for d in starts[0]:
+        for h in starts[1]:
+            for w in starts[2]:
+                count[d : d + size, h : h + size, w : w + size] += 1
+    assert count.min() >= 1
+
+
+@pytest.mark.parametrize("size", [64, 96])
+def test_reconstruction_with_hipmri_patch_sizes_and_padding(size):
+    torch.manual_seed(0)
+    image = torch.randn(1, 40, 130, 100)  # depth shorter than both patches
+    logits = sliding_window_logits(two_channel, image, (size,) * 3, num_classes=2, batch_size=4)
+    assert logits.shape == (2, 40, 130, 100)
+    assert torch.allclose(logits, two_channel(image.unsqueeze(0))[0], atol=1e-6)

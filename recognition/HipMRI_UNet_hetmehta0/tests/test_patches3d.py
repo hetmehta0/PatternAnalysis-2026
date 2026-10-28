@@ -179,6 +179,40 @@ def test_class_balanced_raises_rare_class_exposure():
     assert balanced > uniform + 0.2
 
 
+@pytest.mark.parametrize("size", [64, 96])
+@pytest.mark.parametrize("mode,fg_prob", [("uniform", None), ("class_balanced", 1.0)])
+def test_hipmri_patch_sizes_on_real_scan_shapes(size, mode, fg_prob):
+    """64^3 and 96^3 patches from 256x256x128 and 256x256x144 volumes (the HipMRI shapes)."""
+    volumes = synthetic_volumes([(256, 256, 128), (256, 256, 144)])
+    sampler = PatchSampler(volumes, size, mode, seed=3710, fg_prob=fg_prob)
+    plan = sampler.plan(epoch=1, count=12)
+    assert plan == PatchSampler(volumes, size, mode, seed=3710, fg_prob=fg_prob).plan(1, 12)
+    for v, *start in plan:
+        depth = volumes.masks[v].shape[2]
+        assert 0 <= start[0] <= depth - size and all(0 <= s <= 256 - size for s in start[1:])
+        image, mask = extract_patch(volumes.images[v], volumes.masks[v], start, sampler.size)
+        assert image.shape == (1, size, size, size) and image.dtype == torch.float32
+        assert mask.shape == (size, size, size) and mask.dtype == torch.int64
+        assert set(torch.unique(mask).tolist()) <= {0, 1, 2, 3, 4, 5}
+        assert_aligned(image, mask, d0=start[0])
+        if mode == "class_balanced":
+            assert (mask > 0).any()
+
+
+@pytest.mark.parametrize("size", [64, 96])
+@pytest.mark.parametrize("mode,fg_prob", [("uniform", None), ("class_balanced", 1.0)])
+def test_volume_shallower_than_patch_is_zero_padded(size, mode, fg_prob):
+    volumes = synthetic_volumes([(100, 120, 40)])  # every axis shorter than 96, depth < 64
+    sampler = PatchSampler(volumes, size, mode, seed=3710, fg_prob=fg_prob)
+    for v, *start in sampler.plan(epoch=1, count=10):
+        assert start[0] == 0
+        image, mask = extract_patch(volumes.images[v], volumes.masks[v], start, sampler.size)
+        assert image.shape == (1, size, size, size)
+        assert torch.all(image[0, 40:] == 0) and torch.all(mask[40:] == 0)
+        h_end, w_end = min(100 - start[1], size), min(120 - start[2], size)
+        assert_aligned(image[:, :40, :h_end, :w_end], mask[:40, :h_end, :w_end], d0=0)
+
+
 def test_volume_equivalent_patches_rounds_up():
     volumes = synthetic_volumes([(32, 32, 6), (32, 32, 6)])  # 12,288 voxels
     assert volume_equivalent_patches(volumes, (8, 8, 8)) == 24  # exact
