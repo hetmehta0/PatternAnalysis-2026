@@ -270,3 +270,132 @@ A fixed random seed of 3710 was used for the experiments, and the same patient-l
 Training configurations, epoch histories and validation scores were recorded. The best-performing checkpoints were saved for subsequent analysis.
 
 Only one training run per configuration was conducted, meaning the reported results describe performance under the selected experimental conditions rather than an estimate of variability across random seeds.
+
+6. Results
+
+This section presents the segmentation performance of the 2D and 3D U-Net architectures, comparing validation Dice scores, class-specific performance, model complexity and computational cost.
+
+6.1 Overall Segmentation Performance
+
+The best validation mean foreground Dice scores for each model are summarised below.
+
+| Model | Trainable Parameters | Best Validation Dice | Best Epoch | Completed Epochs |
+|---|---:|---:|---:|---:|
+| 2D U-Net 256 | 5,140,166 | 0.9131 | 15 | 20 |
+| 2D U-Net 512 | 7,762,630 | 0.9113 | 12 | 20 |
+| 3D U-Net 256 | 14,975,238 | 0.9226 | 15 | 19 |
+| **3D U-Net 512** | **22,578,438** | **0.9247** | **20** | **20** |
+| Residual 3D U-Net 256 | 15,194,278 | *Pending* | *Pending* | *Pending* |
+
+The standard 3D U-Net models achieved higher mean foreground validation Dice scores than their corresponding 2D configurations.
+
+The 3D U-Net 256 achieved a Dice score of 0.9226 compared with 0.9131 for the 2D U-Net 256, an absolute increase of approximately 0.95 percentage points.
+
+Similarly, the 3D U-Net 512 achieved 0.9247 compared with 0.9113 for the 2D U-Net 512, an increase of approximately 1.34 percentage points.
+
+The highest validation Dice among the completed experiments was achieved by the 3D U-Net 512.
+
+6.2 Effect of Bottleneck Capacity
+
+The two bottleneck configurations produced different results for the 2D and 3D architectures.
+
+| Comparison | Difference in Validation Dice | Additional Parameters |
+|---|---:|---:|
+| 2D 512 vs 2D 256 | −0.0018 | +2,622,464 |
+| 3D 512 vs 3D 256 | +0.0021 | +7,603,200 |
+
+Increasing the bottleneck capacity from 256 to 512 did not improve performance for the 2D U-Net, with the larger model achieving a slightly lower validation Dice.
+
+For the 3D U-Net, increasing bottleneck capacity produced a small improvement of approximately 0.21 percentage points, despite increasing the number of trainable parameters by approximately 51%.
+
+These results indicate that increasing model capacity does not necessarily produce a proportional improvement in segmentation performance.
+
+6.3 Per-Class Segmentation Performance
+
+The best 2D U-Net 256 checkpoint achieved the following class-specific Dice scores.
+
+| Anatomical Class | 2D U-Net 256 |
+|---|---:|
+| Bladder | 0.9835 |
+| Body | 0.9133 |
+| Bone | 0.9563 |
+| Rectum | 0.8750 |
+| Prostate | 0.8373 |
+| **Mean Foreground Dice** | **0.9131** |
+
+The prostate and rectum achieved lower Dice scores than several of the other anatomical classes, indicating that these structures were more challenging to segment under the baseline configuration.
+
+For comparison, the 3D U-Net 256 produced the following values at epoch 19:
+
+| Anatomical Class | 3D U-Net 256 — Epoch 19 |
+|---|---:|
+| Bladder | 0.9802 |
+| Body | 0.9072 |
+| Bone | 0.9508 |
+| Rectum | 0.8704 |
+| Prostate | 0.8672 |
+| **Mean Foreground Dice** | **0.9152** |
+
+These epoch-19 results show a higher prostate Dice than the best 2D U-Net 256 checkpoint. However, the values are not taken from the best 3D checkpoint, which occurred at epoch 15.
+
+A definitive best-checkpoint per-class comparison requires the class-specific values recorded at epoch 15.
+
+6.4 Training Progression
+
+The standard 3D U-Net 256 reached its highest validation Dice of 0.9226 at epoch 15. Training was interrupted by a terminal disconnection after epoch 19, but the best-performing checkpoint had already been saved.
+
+The standard 3D U-Net 512 completed its planned 20 epochs and achieved its highest validation Dice of 0.9247 at epoch 20.
+
+Both models showed substantial improvements in validation performance during their initial training epochs, followed by smaller fluctuations as training progressed.
+
+The 3D U-Net 256 also experienced an unusually low validation Dice of 0.4185 at epoch 10, despite achieving 0.9058 at epoch 9 and recovering to 0.9134 at epoch 11. This indicates an isolated period of validation instability, although its underlying cause was not established.
+
+**[Insert training-loss and validation-Dice curves from the saved experiment outputs.]**
+
+6.5 Computational Cost
+
+Model complexity was compared using the number of trainable parameters.
+
+| Model | Trainable Parameters |
+|---|---:|
+| 2D U-Net 256 | 5.14 million |
+| 2D U-Net 512 | 7.76 million |
+| 3D U-Net 256 | 14.98 million |
+| 3D U-Net 512 | 22.58 million |
+| Residual 3D U-Net 256 | 15.19 million |
+
+The 3D architectures contained substantially more parameters than their corresponding 2D variants because three-dimensional convolutional kernels operate across an additional spatial dimension.
+
+The standard 3D U-Net 256 required approximately 340–360 seconds per epoch during much of its training, compared with approximately 1,136 seconds of total recorded training time for the 2D U-Net 256.
+
+These timing values are descriptive rather than a controlled speed benchmark, since the 2D and 3D models used different training inputs, sampling procedures and validation workloads.
+
+**[Insert final recorded training times and GPU memory usage from each model's summary.json.]**
+
+6.6 Improved Residual 3D U-Net
+
+The improved Residual 3D U-Net 256 was designed to investigate whether residual convolution blocks improve segmentation performance relative to the standard 3D U-Net 256.
+
+Both models use the same bottleneck capacity, patient-level data splits, training settings, loss function and validation procedure.
+
+| Metric | Standard 3D U-Net 256 | Residual 3D U-Net 256 |
+|---|---:|---:|
+| Parameters | 14,975,238 | 15,194,278 |
+| Best validation Dice | 0.9226 | *Pending* |
+| Best epoch | 15 | *Pending* |
+| Completed epochs | 19 | *Pending* |
+| Training time | *See experiment logs* | *Pending* |
+
+**[Insert the completed residual-model validation scores and compare against the standard 3D U-Net 256.]**
+
+The interpretation of these results is presented in Section 7.
+
+6.7 Summary of Findings
+
+Across the completed baseline experiments, the standard 3D U-Net models achieved higher validation mean foreground Dice scores than the 2D architectures.
+
+The 3D U-Net 512 achieved the highest observed score of 0.9247, while the 3D U-Net 256 achieved 0.9226 with substantially fewer parameters.
+
+These findings are consistent with the hypothesis that volumetric spatial context may improve anatomical segmentation. However, the experiments do not independently isolate spatial dimensionality from differences in parameter count and training procedures.
+
+Results from the residual architecture will provide a further comparison of architectural design choices within the 3D U-Net framework.
