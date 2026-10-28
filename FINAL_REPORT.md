@@ -68,3 +68,72 @@ Risks, budget and fallback. Main risks are small-cohort variance, resize-related
 
 Following the feasibility review consultation, the tutor suggested investigating the 3D aspect of MRI segmentation, which I had not initially considered. My original plan was to compare a standard 2D U-Net with an improved 2D U-Net using residual connections. Based on this feedback, I revised the project to use the 2D U-Net as a baseline, followed by a standard 3D U-Net and an improved 3D U-Net with residual connections. This revised approach allows me to investigate whether incorporating spatial information across neighbouring MRI slices improves segmentation performance, while also evaluating the effect of residual connections.
 
+## 4. Methodology
+
+Three U-Net-based architectures were used to investigate the effect of spatial context and architectural improvements on multi-class MRI segmentation: a standard 2D U-Net, a standard 3D U-Net, and an improved 3D U-Net incorporating residual connections. The 2D model serves as the baseline, while the 3D models investigate whether learning spatial relationships between neighbouring MRI slices improves segmentation performance.
+
+4.1 Standard 2D U-Net
+
+The initial baseline uses a standard 2D U-Net architecture consisting of an encoder, bottleneck, decoder, and skip connections. The encoder progressively extracts higher-level features through convolutional blocks while reducing the spatial resolution of the input image. Each convolutional block contains two convolution operations with batch normalisation and ReLU activation. Max pooling is used for downsampling. The bottleneck processes the encoded features at the lowest spatial resolution, allowing the network to learn more complex representations of the input. The decoder progressively restores the original spatial resolution using transposed convolutions. Skip connections concatenate features from the corresponding encoder stages with decoder features, helping recover spatial details lost during downsampling. This is particularly important for segmentation, where accurately identifying anatomical boundaries requires both high-level context and local information.
+
+Two configurations were implemented:
+
+| Model | Encoder Channels | Bottleneck Channels | Trainable Parameters |
+|---|---|---:|---:|
+| 2D U-Net 256 | 32, 64, 128, 256 | 256 | 5,140,166 |
+| 2D U-Net 512 | 32, 64, 128, 256 | 512 | 7,762,630 |
+
+Both configurations process individual axial MRI slices as single-channel images and produce six output channels corresponding to the segmentation classes. Although this approach can learn spatial relationships within each slice, it cannot directly use anatomical information from neighbouring slices. Consequently, structures that change in shape or size across the MRI volume may be more difficult to identify using individual cross-sections alone.
+
+4.2 Standard 3D U-Net
+
+To investigate whether volumetric information improves segmentation, the 2D architecture was extended into a standard 3D U-Net.
+
+The 3D model follows the same encoder-decoder structure, but replaces two-dimensional convolutions, pooling, and transposed convolutions with their three-dimensional equivalents. This allows the network to extract features across the depth, height, and width of the input volume rather than processing each MRI slice independently.
+
+The 3D model therefore has access to neighbouring slices within each input patch and can learn how anatomical structures change across depth. This may be beneficial for identifying curved anatomical boundaries and maintaining spatial continuity between consecutive slices.
+
+Two bottleneck configurations were implemented:
+
+| Model | Encoder Channels | Bottleneck Channels | Trainable Parameters |
+|---|---|---:|---:|
+| 3D U-Net 256 | 32, 64, 128, 256 | 256 | 14,975,238 |
+| 3D U-Net 512 | 32, 64, 128, 256 | 512 | 22,578,438 |
+
+3D Patch Sampling
+
+Instead of processing entire MRI volumes during training, the model uses patches of 96 × 96 × 96 voxels.
+
+Patch-based training reduces the memory requirements associated with full-volume 3D convolution and allows multiple training samples to be extracted from each MRI scan.
+
+Class-balanced patch sampling was used with a foreground sampling probability of 0.33 to increase the representation of anatomical structures that may otherwise appear infrequently in uniformly sampled patches.
+
+A preliminary sampling analysis compared 64³ and 96³ patches. The 96³ class-balanced configuration was selected because it provided greater spatial context and more frequent inclusion of smaller anatomical classes, particularly the prostate and rectum.
+
+Full-Volume Validation
+
+During validation, predictions are generated for entire MRI volumes using sliding-window inference.
+
+The volume is divided into overlapping 3D patches, each of which is processed by the model. Predictions from overlapping regions are combined using uniform averaging to reconstruct the complete volumetric segmentation.
+
+An overlap of 50% was used to provide coverage across the volume and reduce the dependence of predictions on individual patch boundaries.
+
+This allows the model to be trained using manageable patches while still being evaluated on complete MRI volumes.
+
+4.3 Improved Residual 3D U-Net
+
+An improved 3D U-Net architecture was developed to investigate whether residual connections can further improve segmentation performance.
+
+The standard U-Net uses skip connections between encoder and decoder stages to preserve spatial information. Residual connections operate differently: they introduce shortcut paths within convolutional blocks, allowing the block's input features to be added to its transformed output.
+
+The residual operation can be expressed as:
+
+\[
+y = \operatorname{ReLU}(F(x) + S(x))
+\]
+
+where \(F(x)\) represents the convolutional transformation and \(S(x)\) represents the identity or projection shortcut used to match feature dimensions.
+
+These connections provide an additional pathway for information and gradients to propagate through the network, potentially making optimisation more effective.
+
+The improved model retains the overall 3D U-Net encoder-decoder architecture, volumetric input format, six output classes, and long skip connections.
