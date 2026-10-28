@@ -246,7 +246,6 @@ For the 3D models, full-volume predictions were generated using sliding-window i
 
 The checkpoint with the highest global mean foreground validation Dice was selected as the best-performing model for each architecture.
 
-The held-out test split was not used for model selection.
 
 5.5 Computational Cost
 
@@ -476,6 +475,8 @@ Several limitations should be considered when interpreting the experimental resu
 
 **Dataset generalisability:** All experiments were conducted using a single MRI dataset. Performance on images acquired using different scanners, imaging protocols, or patient populations has not been established.
 
+**Held-out test evaluation:** The test dataset was not evaluated due to time and computational constraints. Consequently, the reported Dice scores represent validation performance rather than an independent estimate of generalisation to unseen test patients. Although the validation and test sets contain different patients, the repeated use of validation results for model selection may introduce selection bias.
+
 7.6 Future Work
 
 Several extensions could be investigated to build on the findings of this project.
@@ -487,6 +488,3 @@ Second, the improved residual architecture could be extended to a 512-channel bo
 Third, different volumetric patch sizes and sampling strategies could be evaluated through controlled training experiments. This would help determine whether the greater anatomical coverage observed with 96³ patches translates into improved segmentation accuracy.
 
 Further investigations could also include anatomically appropriate MRI data augmentation, alternative loss functions for class imbalance, and optimisation of the data-loading pipeline to reduce computational overhead.
-
-Finally, evaluation on the held-out test set and, where possible, an independent external MRI dataset would provide stronger evidence of generalisation beyond the validation data used for model selection.
-
