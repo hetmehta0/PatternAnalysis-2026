@@ -1,11 +1,11 @@
-HipMRI Anatomical Segmentation Using 2D and 3D U-Net Architectures
+# HipMRI Anatomical Segmentation Using 2D and 3D U-Net Architectures
 
-1) Introduction
+## 1) Introduction
 
-1.1
- The purpose of medical segmentation using computer vision is to easily idenitfy areas of need to detect lesions, their size, location and relationship with nearby areas.  
+### 1.1
+ The purpose of medical segmentation using computer vision is to easily idenitfy areas of need to detect lesions, their size, location and relationship with nearby areas (Gao et al., 2025).  
 
- MRI is used because it excels at differentiating subtle variations in dense soft tissues—such as distinguishing gray matter, white matter, and cerebrospinal fluid in the brain, or mapping muscles, ligaments, and cartilage in joints. Moreover It provides an accurate 3D cross-sectional volumes across any spatial plane making. 
+ MRI is used because it excels at differentiating subtle variations in dense soft tissues—such as distinguishing gray matter, white matter, and cerebrospinal fluid in the brain, or mapping muscles, ligaments, and cartilage in joints. Moreover It provides an accurate 3D cross-sectional volumes across any spatial plane making (Palazzo et al. 2024)
 
 Even tho MRI is capable of providing multiplanar anatomical information, there can still be areas that hard to differentiate with some planes having lower resolution than others 
 - 2D limitations 
@@ -13,21 +13,21 @@ The limitations with 2D implentation is that each slice is processed independent
 - 3D oppuritnity 
 The benefit of using a 3D U-net is that it can process a block of neighbouring slices simultaneously, as well as learn how the organ's shape changes along the depth axis. Moreover it learns continuity, cruvature and spatial relationship across slices. It may produce more consistent anatomical segmentation. 
 
-1.2 
+### 1.2 
 RQ: Does incorporating 3D spatial context improve multi-class MRI segmentation when compared to a standard 2D U-Net segmentation baseline and does and improved 3D U-Net using residual connections provide enough improvement for the increased computational cost?
 
-1.3 
+### 1.3 
 Hypothesis: 
 IF A 3D U-Net uses spatial information from neighbouring MRI slices THEN It may produce more accurate segmentation than a standard 2D U-Net BECAUSE Organs are three-dimensional structures whose cross-sectional shapes and boundaries change across depth. Learning these relationships may help identify anatomical boundaries that are ambiguous in individual 2D slices.
 
-1.4 Eval approach 
+### 1.4 Eval approach 
 Performance is evaluated using mean foreground Dice and per-class Dice scores on the validation dataset. Computational costs, including training time and model complexity, are also considered to determine whether any improvements in segmentation accuracy justify the additional computational resources required.
 
-2) Dataset and processing 
-2.1 DataSet Overview
+## 2) Dataset and processing 
+### 2.1 DataSet Overview
 The HipMRI dataset contains 211 MRI Volumes from 38 patients. Each Volume has a corresponding segementation and the data is stored in NIfTI (.nii.gz) format. Volume's dimensions are: 256x256x128 or 256x256x144. There are six segmentation labels: background, bladder, body, bone, rectum and prostate. Generaly the bladder and body occupy are relatively large regions whereas the rectum and prostate are smaller regions. Furthermore each structure has different geometry and making segmentation difficulty vary beteen classes. Finally these differences allows us to investigate whether 3D spatial context particulary benefits smaller or more complex anatomical structures 
 
-2.2 Dataset Splitting
+### 2.2 Dataset Splitting
 
 | Split | Patients | MRI Volumes |
 |---|---:|---:|
@@ -43,13 +43,13 @@ The HipMRI dataset contains 211 MRI Volumes from 38 patients. Each Volume has a 
 - The **validation set** is used to evaluate performance during training and select the best-performing model.
 - The **test set** remains held out for final evaluation, providing an independent assessment of model performance.
 
-2.3 Preprocessing
-2D U-Net:
+### 2.3 Preprocessing
+#### 2D U-Net:
 - MRI volumes divided into individual 2D axial slices.
 - Images paired with corresponding segmentation masks.
 - Individual slices fed into the model.
 - Predictions reassembled into volumes for validation.
-3D U-Net:
+#### 3D U-Net:
 - MRI volumes processed as volumetric data.
 - Extract 96 × 96 × 96 voxel patches.
 - Use class-balanced sampling with foreground probability 0.33.
@@ -59,7 +59,7 @@ The HipMRI dataset contains 211 MRI Volumes from 38 patients. Each Volume has a 
 (run command in gpu lab to get table and paste here)
 
 
-3.0 
+### 3.0 
 User need and scope. An imaging specialist needs a prototype that drafts prostate contours for review. Compare normal-difficulty 2D Improved U-Net with standard 2D U-Net on the same held-out HipMRI patients. Investigate whether residual multi-scale features reduce difficult boundary errors, despite the absence of 3D continuity. This prototype is not approved for clinical use.
 Testable acceptance criteria (proposed). (1) Zero patient overlap and no reused files across partitions; reject misaligned pairs and unknown labels. (2) Held-out patient-macro prostate Dice >= 0.75, with pooled and per-class Dice/IoU also reported. (3) Review 3-5 real boundary failures, including apex/base and adjacent-organ leakage, using input/truth/prediction/FP-FN panels. (4) On the allocated GPU, target peak allocated memory <= 8 GiB and warmed forward latency <= 1 second per 256x256 slice at batch 1. These are proposed resource limits, not measured Rangpur results. (5) Compare both models using the identical split, preprocessing, seed and training budget.
 Model choice and course concepts. Use 2D Nifti slices, a verified fixed multi-class vocabulary, per-slice normalization and patient-level partitions. Convolutions, pooling/striding, skip connections, residual learning, dropout and gradient supervision connect course concepts to the architecture. 
@@ -68,11 +68,11 @@ Risks, budget and fallback. Main risks are small-cohort variance, resize-related
 
 Following the feasibility review consultation, the tutor suggested investigating the 3D aspect of MRI segmentation, which I had not initially considered. My original plan was to compare a standard 2D U-Net with an improved 2D U-Net using residual connections. Based on this feedback, I revised the project to use the 2D U-Net as a baseline, followed by a standard 3D U-Net and an improved 3D U-Net with residual connections. This revised approach allows me to investigate whether incorporating spatial information across neighbouring MRI slices improves segmentation performance, while also evaluating the effect of residual connections.
 
- 4. Methodology
+##  4. Methodology
 
 Three U-Net-based architectures were used to investigate the effect of spatial context and architectural improvements on multi-class MRI segmentation: a standard 2D U-Net, a standard 3D U-Net, and an improved 3D U-Net incorporating residual connections. The 2D model serves as the baseline, while the 3D models investigate whether learning spatial relationships between neighbouring MRI slices improves segmentation performance.
 
- 4.1 Standard 2D U-Net
+###  4.1 Standard 2D U-Net
 
 The initial baseline uses a standard 2D U-Net architecture consisting of an encoder, bottleneck, decoder, and skip connections.
 
@@ -93,7 +93,7 @@ Both configurations process individual axial MRI slices as single-channel images
 
 Although this approach can learn spatial relationships within each slice, it cannot directly use anatomical information from neighbouring slices. Consequently, structures that change in shape or size across the MRI volume may be more difficult to identify using individual cross-sections alone.
 
- 4.2 Standard 3D U-Net
+###  4.2 Standard 3D U-Net
 
 To investigate whether volumetric information improves segmentation, the 2D architecture was extended into a standard 3D U-Net.
 
@@ -110,7 +110,7 @@ Two bottleneck configurations were implemented:
 
 Both configurations produce six output logits per voxel using a final 1×1×1 convolution. The network uses four downsampling stages, requiring input spatial dimensions divisible by 16.
 
- 3D Patch Sampling
+####  3D Patch Sampling
 
 Instead of processing entire MRI volumes during training, the model uses patches of 96 × 96 × 96 voxels.
 
@@ -122,7 +122,7 @@ A preliminary patch-sampling analysis was conducted using 5,000 patches per conf
 
 Therefore, 96³ patches were selected to provide greater spatial context and more frequent inclusion of these anatomical structures. However, this comparison measured class presence rather than segmentation performance, and no 64³ model was trained.
 
- Full-Volume Validation
+####  Full-Volume Validation
 
 During validation, predictions are generated for entire MRI volumes using sliding-window inference.
 
@@ -132,7 +132,7 @@ An overlap of 50% was used to provide coverage across the volume and reduce the 
 
 This allows the model to be trained using manageable patches while still being evaluated on complete MRI volumes.
 
- 4.3 Improved Residual 3D U-Net
+###  4.3 Improved Residual 3D U-Net
 
 An improved 3D U-Net architecture was developed to investigate whether residual connections can further improve segmentation performance.
 
@@ -152,7 +152,7 @@ Each residual block contains two 3D convolution operations with batch normalisat
 
 The improved architecture replaces all nine standard convolution blocks with residual blocks while retaining the original U-Net encoder-decoder structure, volumetric input format, six output classes, and long skip connections.
 
-Controlled Architectural Comparison
+#### Controlled Architectural Comparison
 
 For the improved experiment, the 256-channel bottleneck configuration was selected to limit computational cost and allow a direct comparison with the standard 3D U-Net 256.
 
@@ -169,13 +169,13 @@ By keeping these experimental settings consistent, the comparison aims to invest
 
 The effectiveness of this modification is assessed through validation Dice scores and computational cost, including training time and GPU memory usage.
 
-5. Experimental Setup
+## 5. Experimental Setup
 
 All experiments were conducted using PyTorch, with the 3D models trained on an NVIDIA L4 GPU with approximately 24 GB of VRAM. The experiments compared segmentation performance across the 2D U-Net, standard 3D U-Net and improved Residual 3D U-Net architectures.
 
 The same patient-level dataset splits and evaluation metrics were used across the experiments to maintain consistency.
 
-5.1 Training Configuration
+### 5.1 Training Configuration
 
 All models were trained using the AdamW optimiser with a combined Dice and Cross-Entropy loss. A fixed training budget of 20 epochs was planned for each experiment, without learning-rate scheduling or early stopping.
 
@@ -201,7 +201,7 @@ The improved Residual 3D U-Net was configured using the same training parameters
 
 The standard 3D U-Net 256 experiment was interrupted after 19 completed epochs due to a disconnected terminal session. Its best model checkpoint had already been saved at epoch 15. The 3D U-Net 512 completed all 20 epochs.
 
-5.2 Loss Function
+### 5.2 Loss Function
 
 A weighted combination of Dice loss and Cross-Entropy loss was used for model optimisation:
 
@@ -215,7 +215,7 @@ Combining these losses allows the models to optimise both classification accurac
 
 The same loss formulation was retained across all experiments to avoid introducing loss-function differences into the architectural comparisons.
 
-5.3 Evaluation Metrics
+### 5.3 Evaluation Metrics
 
 The primary evaluation metric was the mean foreground Dice Similarity Coefficient (DSC), excluding the background class.
 
@@ -236,7 +236,7 @@ Two complementary measurements were recorded:
 
 Per-class Dice scores were also recorded to investigate whether volumetric context affected segmentation performance differently across anatomical structures.
 
-5.4 Validation and Model Selection
+### 5.4 Validation and Model Selection
 
 Model performance was evaluated on the validation dataset after each training epoch.
 
@@ -247,7 +247,7 @@ For the 3D models, full-volume predictions were generated using sliding-window i
 The checkpoint with the highest global mean foreground validation Dice was selected as the best-performing model for each architecture.
 
 
-5.5 Computational Cost
+### 5.5 Computational Cost
 
 In addition to segmentation accuracy, computational efficiency was considered when evaluating the architectures.
 
@@ -262,7 +262,7 @@ These measurements allow the project to investigate whether improvements in segm
 
 Because the 2D and 3D models use different input representations and training workloads, their training times are not perfectly controlled measures of architectural efficiency. Computational comparisons are therefore interpreted alongside differences in data processing and validation procedures.
 
-5.6 Reproducibility
+### 5.6 Reproducibility
 
 A fixed random seed of 3710 was used for the experiments, and the same patient-level data split was maintained across all models.
 
@@ -270,11 +270,11 @@ Training configurations, epoch histories and validation scores were recorded. Th
 
 Only one training run per configuration was conducted, meaning the reported results describe performance under the selected experimental conditions rather than an estimate of variability across random seeds.
 
-6. Results
+## 6. Results
 
 This section presents the segmentation performance of the 2D and 3D U-Net architectures, comparing validation Dice scores, class-specific performance, model complexity and computational cost.
 
-6.1 Overall Segmentation Performance
+### 6.1 Overall Segmentation Performance
 
 The best validation mean foreground Dice scores for each model are summarised below.
 
@@ -294,7 +294,7 @@ Similarly, the 3D U-Net 512 achieved 0.9247 compared with 0.9113 for the 2D U-Ne
 
 The highest validation Dice among the completed experiments was achieved by the 3D U-Net 512.
 
-6.2 Effect of Bottleneck Capacity
+### 6.2 Effect of Bottleneck Capacity
 
 The two bottleneck configurations produced different results for the 2D and 3D architectures.
 
@@ -309,7 +309,7 @@ For the 3D U-Net, increasing bottleneck capacity produced a small improvement of
 
 These results indicate that increasing model capacity does not necessarily produce a proportional improvement in segmentation performance.
 
-6.3 Per-Class Segmentation Performance
+### 6.3 Per-Class Segmentation Performance
 
 The best 2D U-Net 256 checkpoint achieved the following class-specific Dice scores.
 
@@ -339,7 +339,7 @@ These epoch-19 results show a higher prostate Dice than the best 2D U-Net 256 ch
 
 A definitive best-checkpoint per-class comparison requires the class-specific values recorded at epoch 15.
 
-6.4 Training Progression
+### 6.4 Training Progression
 
 The standard 3D U-Net 256 reached its highest validation Dice of 0.9226 at epoch 15. Training was interrupted by a terminal disconnection after epoch 19, but the best-performing checkpoint had already been saved.
 
@@ -351,7 +351,7 @@ The 3D U-Net 256 also experienced an unusually low validation Dice of 0.4185 at 
 
 **[Insert training-loss and validation-Dice curves from the saved experiment outputs.]**
 
-6.5 Computational Cost
+### 6.5 Computational Cost
 
 Model complexity was compared using the number of trainable parameters.
 
@@ -371,7 +371,7 @@ These timing values are descriptive rather than a controlled speed benchmark, si
 
 **[Insert final recorded training times and GPU memory usage from each model's summary.json.]**
 
-6.6 Improved Residual 3D U-Net
+### 6.6 Improved Residual 3D U-Net
 
 The improved Residual 3D U-Net 256 was designed to investigate whether residual convolution blocks improve segmentation performance relative to the standard 3D U-Net 256.
 
@@ -389,7 +389,7 @@ Both models use the same bottleneck capacity, patient-level data splits, trainin
 
 The interpretation of these results is presented in Section 7.
 
-6.7 Summary of Findings
+### 6.7 Summary of Findings
 
 Across the completed baseline experiments, the standard 3D U-Net models achieved higher validation mean foreground Dice scores than the 2D architectures.
 
@@ -399,9 +399,9 @@ These findings are consistent with the hypothesis that volumetric spatial contex
 
 Results from the residual architecture will provide a further comparison of architectural design choices within the 3D U-Net framework.
 
-7. Discussion and Limitations
+## 7. Discussion and Limitations
 
-7.1 Comparison of 2D and 3D U-Net Performance
+### 7.1 Comparison of 2D and 3D U-Net Performance
 
 The experimental results indicate that the standard 3D U-Net architectures achieved higher mean foreground validation Dice scores than their corresponding 2D baselines.
 
@@ -411,7 +411,7 @@ These results are consistent with the primary hypothesis that incorporating neig
 
 However, the observed improvement cannot be attributed exclusively to the use of three-dimensional spatial information. The 3D architectures also contain more trainable parameters than their corresponding 2D models and use different input representations and training procedures. Consequently, the results demonstrate an improvement under the implemented experimental configurations rather than proving that volumetric context alone caused the difference.
 
-7.2 Effect of Bottleneck Capacity
+### 7.2 Effect of Bottleneck Capacity
 
 Increasing the bottleneck capacity from 256 to 512 produced different outcomes for the 2D and 3D architectures.
 
@@ -423,7 +423,7 @@ The relatively small improvement suggests diminishing returns from increasing bo
 
 Therefore, the 256-channel configuration was selected for the improved residual experiment to investigate whether an architectural modification could provide additional benefits without substantially increasing model complexity.
 
-7.3 Effect of Residual Connections
+### 7.3 Effect of Residual Connections
 
 The improved Residual 3D U-Net was developed to investigate whether incorporating residual connections into convolutional blocks could improve segmentation performance.
 
@@ -439,7 +439,7 @@ Both models use the same dataset split, input patch dimensions, loss function, o
 
 Any observed difference should be interpreted cautiously because only one training run was conducted for each architecture. Furthermore, the residual architecture introduces a small increase in trainable parameters, so any performance difference cannot be attributed exclusively to the shortcut connections.
 
-7.4 Computational Cost and Performance Trade-offs
+### 7.4 Computational Cost and Performance Trade-offs
 
 Although the 3D models achieved higher validation Dice scores, they also required greater computational resources.
 
@@ -457,7 +457,7 @@ Whether this improvement justifies the additional computational cost depends on 
 
 The small performance difference between the standard 3D 256 and 512 models also suggests that increasing model capacity should be evaluated against its computational requirements rather than assuming that larger architectures will produce substantial improvements.
 
-7.5 Limitations
+### 7.5 Limitations
 
 Several limitations should be considered when interpreting the experimental results.
 
@@ -477,7 +477,7 @@ Several limitations should be considered when interpreting the experimental resu
 
 **Held-out test evaluation:** The test dataset was not evaluated due to time and computational constraints. Consequently, the reported Dice scores represent validation performance rather than an independent estimate of generalisation to unseen test patients. Although the validation and test sets contain different patients, the repeated use of validation results for model selection may introduce selection bias.
 
-7.6 Future Work
+### 7.6 Future Work
 
 Several extensions could be investigated to build on the findings of this project.
 
@@ -488,3 +488,14 @@ Second, the improved residual architecture could be extended to a 512-channel bo
 Third, different volumetric patch sizes and sampling strategies could be evaluated through controlled training experiments. This would help determine whether the greater anatomical coverage observed with 96³ patches translates into improved segmentation accuracy.
 
 Further investigations could also include anatomically appropriate MRI data augmentation, alternative loss functions for class imbalance, and optimisation of the data-loading pipeline to reduce computational overhead.
+
+## 9. Artificial Intelligence Usage Disclosure
+
+AI tools, including ChatGPT and Claude, were used to assist with the engineering and implementation aspects of this project. This included generating grunt work code, developing automated tests that run before model is trained and tested and assisting with the setup and configuration of the Rangpur computing cluster and UQ GPU Lab. All architetural design was done by me, and code was reviewed by me, I ensured auto commits were not on. I recorded dice scores ensure code ran on the data and did all precautionary checks before commiting. I oversaw what it was implementing and steered when it was doing something wrong. 
+
+## 10 References 
+
+Gao, Y., Jiang, Y., Peng, Y., Yuan, F., Zhang, X., & Wang, J. (2025). Medical image segmentation: A comprehensive review of deep learning-based methods. *Tomography, 11*(5), Article 52. https://doi.org/10.3390/tomography11050052
+
+Palazzo, S., Zambetta, G., & Calbi, R. (2024). An overview of segmentation techniques for CT and MRI images: Clinical implications and future directions in medical diagnostics. *Medical Imaging Process & Technology, 7*(1), Article 7227. https://doi.org/10.24294/mipt7227
+
