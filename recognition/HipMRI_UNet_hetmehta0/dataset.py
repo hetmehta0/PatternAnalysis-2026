@@ -247,3 +247,152 @@ class SliceDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
         image = torch.from_numpy(np.ascontiguousarray(image, dtype=np.float32)).unsqueeze(0)
         mask = torch.from_numpy(np.ascontiguousarray(mask, dtype=np.int64))
         return image, mask
+
+
+# =============================================================================
+# 3D patches (added for the 3D U-Net; the 2D code above is unchanged)
+# =============================================================================
+# Arrays stay in the loaded [H, W, D] layout. Patches are returned in PyTorch's
+# 3D layout: image [1, D, H, W] float32 and mask [D, H, W] int64, where D is
+# the axial (canonical z) axis. Patch starts and sizes are given as (d, h, w).
+PatchSize = tuple[int, int, int]
+PatchStart = tuple[int, int, int, int]  # (volume index, d, h, w)
+SAMPLING_MODES = ("uniform", "class_balanced")
+
+
+def as_patch_size(size: int | Sequence[int]) -> PatchSize:
+    """64 -> (64, 64, 64); a 3-sequence is taken as (d, h, w)."""
+    if isinstance(size, int):
+        return (size, size, size)
+    if len(size) != 3:
+        raise ValueError(f"Patch size needs 1 or 3 values, got {size}")
+    return (int(size[0]), int(size[1]), int(size[2]))
+
+
+def to_model_layout(array: np.ndarray) -> np.ndarray:
+    """[H, W, D] -> [D, H, W] (a transpose only; no resampling)."""
+    return np.ascontiguousarray(np.transpose(array, (2, 0, 1)))
+
+
+def volume_shape_dhw(array: np.ndarray) -> PatchSize:
+    h, w, d = array.shape
+    return (d, h, w)
+
+
+def extract_patch(
+    image: np.ndarray, mask: np.ndarray, start: Sequence[int], size: PatchSize
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Cut the same (d, h, w) box from an [H, W, D] image and mask.
+
+    Parts of the box beyond the volume edge are zero-padded (image 0 is the
+    normalised background value, mask 0 is background). Returns image
+    [1, D, H, W] float32 and mask [D, H, W] int64.
+    """
+    d0, h0, w0 = start
+    pd_, ph, pw = size
+    shape = volume_shape_dhw(image)
+    d1, h1, w1 = (min(s + p, n) for s, p, n in zip(start, size, shape, strict=True))
+    image_patch = np.zeros((pd_, ph, pw), dtype=np.float32)
+    mask_patch = np.zeros((pd_, ph, pw), dtype=np.int64)
+    image_patch[: d1 - d0, : h1 - h0, : w1 - w0] = to_model_layout(image[h0:h1, w0:w1, d0:d1])
+    mask_patch[: d1 - d0, : h1 - h0, : w1 - w0] = to_model_layout(mask[h0:h1, w0:w1, d0:d1])
+    return torch.from_numpy(image_patch).unsqueeze(0), torch.from_numpy(mask_patch)
+
+
+def volume_equivalent_patches(volumes: VolumeSet, size: PatchSize) -> int:
+    """Patches per epoch whose voxels add up to every voxel of the split once (rounded up)."""
+    total = sum(int(m.size) for m in volumes.masks)
+    return -(-total // int(np.prod(size)))
+
+
+class PatchSampler:
+    """Seeded patch plans for one split.
+
+    ``uniform``         pick a volume uniformly, then a uniform start inside it.
+    ``class_balanced``  as uniform, except that with probability ``fg_prob`` the
+                        patch is centred on a random voxel of a foreground
+                        class chosen uniformly among the classes present in
+                        that volume (centre clamped so the patch stays inside).
+
+    ``plan(epoch, count)`` depends only on (seed, epoch, count) and the data,
+    never on a model, so every model trained with the same settings sees the
+    same patches in the same order.
+    """
+
+    def __init__(
+        self,
+        volumes: VolumeSet,
+        size: int | Sequence[int],
+        mode: str,
+        seed: int,
+        fg_prob: float | None = None,
+        num_classes: int = NUM_CLASSES,
+    ) -> None:
+        if mode not in SAMPLING_MODES:
+            raise ValueError(f"Sampling mode must be one of {SAMPLING_MODES}, got {mode!r}")
+        if mode == "class_balanced" and (fg_prob is None or not 0.0 <= fg_prob <= 1.0):
+            raise ValueError("class_balanced sampling needs fg_prob in [0, 1]")
+        if mode == "uniform" and fg_prob is not None:
+            raise ValueError("fg_prob is only used with class_balanced sampling")
+        self.volumes = volumes
+        self.size = as_patch_size(size)
+        self.mode = mode
+        self.seed = seed
+        self.fg_prob = fg_prob
+        self.num_classes = num_classes
+        # Foreground classes present in each volume (needed for class_balanced).
+        self.present = [
+            [c for c, n in enumerate(np.bincount(m.ravel(), minlength=num_classes)) if c and n]
+            for m in volumes.masks
+        ]
+
+    def _uniform_start(self, rng: np.random.Generator, v: int) -> tuple[int, int, int]:
+        shape = volume_shape_dhw(self.volumes.masks[v])
+        return tuple(
+            int(rng.integers(0, max(n - p, 0) + 1)) for n, p in zip(shape, self.size, strict=True)
+        )
+
+    def _centred_start(self, rng: np.random.Generator, v: int, label: int) -> tuple[int, int, int]:
+        mask = self.volumes.masks[v]
+        flat = np.flatnonzero(mask == label)
+        h, w, d = np.unravel_index(flat[rng.integers(len(flat))], mask.shape)
+        centre = (int(d), int(h), int(w))
+        shape = volume_shape_dhw(mask)
+        return tuple(
+            min(max(c - p // 2, 0), max(n - p, 0))
+            for c, p, n in zip(centre, self.size, shape, strict=True)
+        )
+
+    def plan(self, epoch: int, count: int) -> list[PatchStart]:
+        rng = np.random.default_rng([self.seed, epoch])
+        starts: list[PatchStart] = []
+        for _ in range(count):
+            v = int(rng.integers(len(self.volumes)))
+            centred = (
+                self.mode == "class_balanced" and self.present[v] and rng.random() < self.fg_prob
+            )
+            if centred:
+                label = self.present[v][int(rng.integers(len(self.present[v])))]
+                start = self._centred_start(rng, v, label)
+            else:
+                start = self._uniform_start(rng, v)
+            starts.append((v, *start))
+        return starts
+
+
+class PatchDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
+    """3D patches of a VolumeSet at the positions given by a patch plan."""
+
+    def __init__(
+        self, volumes: VolumeSet, plan: Sequence[PatchStart], size: int | Sequence[int]
+    ) -> None:
+        self.volumes = volumes
+        self.plan = list(plan)
+        self.size = as_patch_size(size)
+
+    def __len__(self) -> int:
+        return len(self.plan)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
+        v, *start = self.plan[index]
+        return extract_patch(self.volumes.images[v], self.volumes.masks[v], start, self.size)
