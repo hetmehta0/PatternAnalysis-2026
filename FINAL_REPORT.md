@@ -399,3 +399,94 @@ The 3D U-Net 512 achieved the highest observed score of 0.9247, while the 3D U-N
 These findings are consistent with the hypothesis that volumetric spatial context may improve anatomical segmentation. However, the experiments do not independently isolate spatial dimensionality from differences in parameter count and training procedures.
 
 Results from the residual architecture will provide a further comparison of architectural design choices within the 3D U-Net framework.
+
+7. Discussion and Limitations
+
+7.1 Comparison of 2D and 3D U-Net Performance
+
+The experimental results indicate that the standard 3D U-Net architectures achieved higher mean foreground validation Dice scores than their corresponding 2D baselines.
+
+The 2D U-Net 256 achieved a best validation Dice of 0.9131, compared with 0.9226 for the standard 3D U-Net 256, representing an absolute improvement of approximately 0.95 percentage points. Similarly, the 3D U-Net 512 achieved a Dice score of 0.9247, compared with 0.9113 for the 2D U-Net 512, an improvement of approximately 1.34 percentage points.
+
+These results are consistent with the primary hypothesis that incorporating neighbouring MRI slices may improve anatomical segmentation. Unlike 2D U-Net, which processes individual cross-sectional slices, the 3D architecture can learn spatial relationships across depth, height, and width. This additional information may help the model recognise anatomical continuity and structures whose shapes change across successive slices.
+
+However, the observed improvement cannot be attributed exclusively to the use of three-dimensional spatial information. The 3D architectures also contain more trainable parameters than their corresponding 2D models and use different input representations and training procedures. Consequently, the results demonstrate an improvement under the implemented experimental configurations rather than proving that volumetric context alone caused the difference.
+
+7.2 Effect of Bottleneck Capacity
+
+Increasing the bottleneck capacity from 256 to 512 produced different outcomes for the 2D and 3D architectures.
+
+For the 2D U-Net, the 256-channel model achieved a higher validation Dice of 0.9131 compared with 0.9113 for the 512-channel model. This suggests that increasing model capacity did not improve segmentation performance under the selected training configuration.
+
+In contrast, the 3D U-Net 512 achieved a validation Dice of 0.9247, compared with 0.9226 for the 3D U-Net 256. This represents an improvement of approximately 0.21 percentage points, despite the larger 3D model containing approximately 51% more trainable parameters.
+
+The relatively small improvement suggests diminishing returns from increasing bottleneck capacity in the tested 3D configurations. Although the 512-channel model achieved the highest validation Dice, the 256-channel model provided similar segmentation performance with substantially fewer parameters.
+
+Therefore, the 256-channel configuration was selected for the improved residual experiment to investigate whether an architectural modification could provide additional benefits without substantially increasing model complexity.
+
+7.3 Effect of Residual Connections
+
+The improved Residual 3D U-Net was developed to investigate whether incorporating residual connections into convolutional blocks could improve segmentation performance.
+
+Residual connections provide additional pathways for information and gradients to propagate through the model. This may support more effective optimisation and feature learning compared with conventional convolutional blocks.
+
+The improved 256-channel model contains 15,194,278 trainable parameters, approximately 1.5% more than the standard 3D U-Net 256, which contains 14,975,238 parameters.
+
+Both models use the same dataset split, input patch dimensions, loss function, optimiser, sampling procedure, and validation method. This provides a relatively controlled comparison of the residual architecture against the standard 3D model.
+
+**[Insert final residual-model validation Dice and best epoch.]**
+
+**[Compare the residual result with the standard 3D U-Net 256 Dice of 0.9226. Discuss whether residual connections improved the best observed validation accuracy, early convergence behaviour, or neither.]**
+
+Any observed difference should be interpreted cautiously because only one training run was conducted for each architecture. Furthermore, the residual architecture introduces a small increase in trainable parameters, so any performance difference cannot be attributed exclusively to the shortcut connections.
+
+7.4 Computational Cost and Performance Trade-offs
+
+Although the 3D models achieved higher validation Dice scores, they also required greater computational resources.
+
+The standard 2D U-Net 256 contains approximately 5.14 million trainable parameters, while the standard 3D U-Net 256 contains approximately 14.98 million. The increase reflects the additional spatial dimension used by three-dimensional convolutional operations.
+
+The standard 3D U-Net 512 contains approximately 22.58 million parameters, making it the largest architecture evaluated in this project.
+
+Training the 3D models also required substantially more time under the implemented experimental setup. The 3D U-Net 256 generally required approximately 340–360 seconds per epoch, whereas the 2D U-Net 256 recorded approximately 1,136 seconds of total training time across its 20 epochs, excluding dataset preloading.
+
+However, these runtime measurements are not directly comparable as isolated measures of computational efficiency. The 2D models were trained on individual slices, while the 3D models processed volumetric patches and performed full-volume sliding-window validation. Differences in data preparation, hardware execution, and validation workload also affect the measured times.
+
+The results therefore demonstrate an accuracy–computation trade-off. The 3D architectures produced approximately 0.95–1.34 percentage points higher mean foreground validation Dice than their corresponding 2D baselines, but required more parameters and longer training under the tested configurations.
+
+Whether this improvement justifies the additional computational cost depends on the intended application. For applications where segmentation accuracy is particularly important, the additional computation may be worthwhile. However, where processing speed, memory consumption, or hardware availability are constrained, the 2D architecture may remain a practical alternative.
+
+The small performance difference between the standard 3D 256 and 512 models also suggests that increasing model capacity should be evaluated against its computational requirements rather than assuming that larger architectures will produce substantial improvements.
+
+7.5 Limitations
+
+Several limitations should be considered when interpreting the experimental results.
+
+**Limited experimental repetitions:** Each architecture was evaluated using a single random seed. Consequently, the reported differences may be affected by random initialisation, patch sampling, and training variability. Repeated experiments would be required to assess the consistency of the results.
+
+**Validation cohort size:** The validation dataset contains six patients and 34 MRI scans. Although patient-level separation reduces the risk of data leakage, the relatively small number of validation patients limits confidence in how well the observed performance differences generalise to unseen patients.
+
+**Differences in model complexity:** The 2D and 3D architectures differ in trainable parameter counts as well as spatial dimensionality. Therefore, the experiments cannot isolate the effect of volumetric context independently from differences in model capacity.
+
+**Training interruption:** The standard 3D U-Net 256 completed 19 of its planned 20 epochs after its terminal session was disconnected. Its best validation checkpoint had already been saved at epoch 15. The incomplete final epoch introduces a small difference in training and checkpoint-selection budgets compared with the 20-epoch models.
+
+**Patch-size selection:** The 96³ patch size was selected based on spatial context and anatomical class-presence analysis. Although 64³ and 96³ patches were compared during sampling analysis, no model was trained using 64³ patches. Therefore, the effect of patch size on actual segmentation accuracy was not independently evaluated.
+
+**Computational comparisons:** Training times reflect the specific hardware, data-processing pipeline, and experiment configurations used. They should not be interpreted as universally applicable runtime estimates.
+
+**Dataset generalisability:** All experiments were conducted using a single MRI dataset. Performance on images acquired using different scanners, imaging protocols, or patient populations has not been established.
+
+7.6 Future Work
+
+Several extensions could be investigated to build on the findings of this project.
+
+First, repeating the experiments across multiple random seeds would provide a more reliable estimate of model performance and help determine whether the observed Dice differences are consistent.
+
+Second, the improved residual architecture could be extended to a 512-channel bottleneck to investigate whether increased model capacity provides additional benefits when combined with residual connections.
+
+Third, different volumetric patch sizes and sampling strategies could be evaluated through controlled training experiments. This would help determine whether the greater anatomical coverage observed with 96³ patches translates into improved segmentation accuracy.
+
+Further investigations could also include anatomically appropriate MRI data augmentation, alternative loss functions for class imbalance, and optimisation of the data-loading pipeline to reduce computational overhead.
+
+Finally, evaluation on the held-out test set and, where possible, an independent external MRI dataset would provide stronger evidence of generalisation beyond the validation data used for model selection.
+
