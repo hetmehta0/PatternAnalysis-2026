@@ -41,7 +41,7 @@ The HipMRI dataset contains 211 MRI Volumes from 38 patients. Each Volume has a 
 - Patient-level splitting prevents scans belonging to the same patient from appearing across different subsets, reducing the risk of data leakage.
 - The **training set** is used to optimise the model's parameters.
 - The **validation set** is used to evaluate performance during training and select the best-performing model.
-- The **test set** remains held out for final evaluation, providing an independent assessment of model performance.
+- The **test set** was reserved for independent evaluation but a complete held-out evaluation was not obtained; all results reported here are validation results.
 
 ### 2.3 Preprocessing
 #### 2D U-Net:
@@ -56,7 +56,7 @@ The HipMRI dataset contains 211 MRI Volumes from 38 patients. Each Volume has a 
 - Patch sampling helps expose the network to less frequently represented structures.
 - Use overlapping sliding-window inference to evaluate full volumes.
 
-(run command in gpu lab to get table and paste here)
+MRI intensity values were normalised separately for each volume. The values were clipped to the 0.5th and 99.5th percentiles of non-zero voxels, then standardised using the mean and standard deviation of the clipped non-zero region. Non-finite input values were replaced with zero before clipping, and a minimum standard deviation safeguard prevented division by zero.
 
 
 ### 3.0 
@@ -192,14 +192,14 @@ The key training settings are summarised below.
 | Training input | Individual 2D slices | 96³ patches | 96³ patches |
 | Patch sampling | Not applicable | Class-balanced | Class-balanced |
 | Foreground sampling probability | Not applicable | 0.33 | 0.33 |
-| Batch size | *[Insert actual 2D batch size]* | 2 | 2 |
-| Mixed precision | *[Verify 2D setting]* | Enabled | Enabled |
+| Batch size | 8 | 2 | 2 |
+| Mixed precision | Enabled | Enabled | Enabled |
 
 The 3D experiments used 1,291 training patches per epoch, representing a volume-equivalent sampling budget across the 136 training volumes. Both standard 3D variants used identical training settings, allowing the effect of bottleneck capacity to be investigated.
 
 The improved Residual 3D U-Net was configured using the same training parameters as the standard 3D U-Net 256, with the principal difference being the introduction of residual convolution blocks.
 
-The standard 3D U-Net 256 experiment was interrupted after 19 completed epochs due to a disconnected terminal session. Its best model checkpoint had already been saved at epoch 15. The 3D U-Net 512 completed all 20 epochs.
+The standard 3D U-Net 256 experiment was interrupted after 19 completed epochs due to a disconnected terminal session. Its best model checkpoint had already been saved at epoch 15. The 3D U-Net 512 and residual 3D U-Net 256 each completed all 20 epochs.
 
 ### 5.2 Loss Function
 
@@ -283,8 +283,8 @@ The best validation mean foreground Dice scores for each model are summarised be
 | 2D U-Net 256 | 5,140,166 | 0.9131 | 15 | 20 |
 | 2D U-Net 512 | 7,762,630 | 0.9113 | 12 | 20 |
 | 3D U-Net 256 | 14,975,238 | 0.9226 | 15 | 19 |
-| **3D U-Net 512** | **22,578,438** | **0.9247** | **20** | **20** |
-| Residual 3D U-Net 256 | 15,194,278 | *Pending* | *Pending* | *Pending* |
+| 3D U-Net 512 | 22,578,438 | 0.9247 | 20 | 20 |
+| **Residual 3D U-Net 256** | **15,194,278** | **0.9298** | **18** | **20** |
 
 The standard 3D U-Net models achieved higher mean foreground validation Dice scores than their corresponding 2D configurations.
 
@@ -292,7 +292,7 @@ The 3D U-Net 256 achieved a Dice score of 0.9226 compared with 0.9131 for the 2D
 
 Similarly, the 3D U-Net 512 achieved 0.9247 compared with 0.9113 for the 2D U-Net 512, an increase of approximately 1.34 percentage points.
 
-The highest validation Dice among the completed experiments was achieved by the 3D U-Net 512.
+The highest validation Dice among the five experiments was achieved by the Residual 3D U-Net 256 (0.9298 at epoch 18).
 
 ### 6.2 Effect of Bottleneck Capacity
 
@@ -337,19 +337,30 @@ For comparison, the 3D U-Net 256 produced the following values at epoch 19:
 
 These epoch-19 results show a higher prostate Dice than the best 2D U-Net 256 checkpoint. However, the values are not taken from the best 3D checkpoint, which occurred at epoch 15.
 
-A definitive best-checkpoint per-class comparison requires the class-specific values recorded at epoch 15.
+The class-specific scores for the best 3D U-Net 256 checkpoint (epoch 15) have not been extracted here, so the epoch-19 figures should not be treated as a best-checkpoint comparison. The residual model’s best-checkpoint class-specific results are shown below.
+
+| Anatomical Class | Residual 3D U-Net 256 — Best Epoch 18 |
+|---|---:|
+| Bladder | 0.9832 |
+| Body | 0.9202 |
+| Bone | 0.9626 |
+| Rectum | 0.8913 |
+| Prostate | 0.8916 |
+| **Mean Foreground Dice** | **0.9298** |
+
+The residual model’s prostate validation Dice of 0.8916 is higher than the 2D U-Net 256 best-checkpoint prostate Dice of 0.8373 by approximately 5.43 percentage points. This is an observed comparison, not evidence that the gain was caused exclusively by residual connections or 3D context.
 
 ### 6.4 Training Progression
 
 The standard 3D U-Net 256 reached its highest validation Dice of 0.9226 at epoch 15. Training was interrupted by a terminal disconnection after epoch 19, but the best-performing checkpoint had already been saved.
 
-The standard 3D U-Net 512 completed its planned 20 epochs and achieved its highest validation Dice of 0.9247 at epoch 20.
+The standard 3D U-Net 512 completed its planned 20 epochs and achieved its highest validation Dice of 0.9247 at epoch 20. The Residual 3D U-Net 256 also completed 20 epochs, reaching its highest validation Dice of 0.9298 at epoch 18.
 
 Both models showed substantial improvements in validation performance during their initial training epochs, followed by smaller fluctuations as training progressed.
 
 The 3D U-Net 256 also experienced an unusually low validation Dice of 0.4185 at epoch 10, despite achieving 0.9058 at epoch 9 and recovering to 0.9134 at epoch 11. This indicates an isolated period of validation instability, although its underlying cause was not established.
 
-**[Insert training-loss and validation-Dice curves from the saved experiment outputs.]**
+**TODO — Insert existing training-loss and validation-Dice curve images from GPU Lab experiment outputs.**
 
 ### 6.5 Computational Cost
 
@@ -365,11 +376,23 @@ Model complexity was compared using the number of trainable parameters.
 
 The 3D architectures contained substantially more parameters than their corresponding 2D variants because three-dimensional convolutional kernels operate across an additional spatial dimension.
 
-The standard 3D U-Net 256 required approximately 340–360 seconds per epoch during much of its training, compared with approximately 1,136 seconds of total recorded training time for the 2D U-Net 256.
+The standard 3D U-Net 256 required an average of 345.5 seconds per completed epoch (6,565.2 seconds across 19 epochs), compared with 56.8 seconds per epoch (1,136.2 seconds across 20 epochs) for the 2D U-Net 256.
 
 These timing values are descriptive rather than a controlled speed benchmark, since the 2D and 3D models used different training inputs, sampling procedures and validation workloads.
 
-**[Insert final recorded training times and GPU memory usage from each model's summary.json.]**
+The recorded training runtimes and peak GPU memory allocations are summarised below. Training duration excludes the initial data-preload step; the 3D U-Net 256 duration was reconstructed from its 19 completed epoch records because the interrupted run did not produce a final `summary.json`.
+
+| Model | Completed epochs | Recorded training time | Mean epoch time | Peak GPU allocated memory |
+|---|---:|---:|---:|---:|
+| 2D U-Net 256 | 20 | 1,136.2 s (18.9 min) | 56.8 s | 837.7 MiB |
+| 2D U-Net 512 | 20 | 1,136.6 s (18.9 min) | 56.8 s | 875.7 MiB |
+| 3D U-Net 256 | 19 | 6,565.2 s (109.4 min) | 345.5 s | 2,040.0 MiB* |
+| 3D U-Net 512 | 20 | 6,571.5 s (109.5 min) | 328.6 s | 2,148.3 MiB |
+| Residual 3D U-Net 256 | 20 | 7,498.3 s (125.0 min) | 374.9 s | 2,608.9 MiB |
+
+*The 3D U-Net 256 memory figure is from its recorded per-epoch training history, rather than a completed run summary. The initial data-preload times were approximately 241–254 seconds across the five experiments.*
+
+The standard 3D U-Net 256 also recorded 3,800.7 seconds of patch-planning activity across its 19 epochs (200.0 seconds per epoch on average). This identifies patch preparation as a substantial computational component, although the planning timer should not be added to the total epoch duration without checking whether the measurements overlap. Overall, the 3D models attained higher validation Dice at considerably greater recorded training time and GPU memory usage under these pipelines.
 
 ### 6.6 Improved Residual 3D U-Net
 
@@ -380,12 +403,12 @@ Both models use the same bottleneck capacity, patient-level data splits, trainin
 | Metric | Standard 3D U-Net 256 | Residual 3D U-Net 256 |
 |---|---:|---:|
 | Parameters | 14,975,238 | 15,194,278 |
-| Best validation Dice | 0.9226 | *Pending* |
-| Best epoch | 15 | *Pending* |
-| Completed epochs | 19 | *Pending* |
-| Training time | *See experiment logs* | *Pending* |
+| Best validation Dice | 0.9226 | **0.9298** |
+| Best epoch | 15 | **18** |
+| Completed epochs | 19 | **20** |
+| Recorded training time | 6,565.2 s (19 epochs) | 7,498.3 s (20 epochs) |
 
-**[Insert the completed residual-model validation scores and compare against the standard 3D U-Net 256.]**
+The residual model improved mean foreground validation Dice by approximately 0.72 percentage points relative to the standard 3D U-Net 256 (0.9298 versus 0.9226), while adding approximately 1.5% more trainable parameters. It also exceeded the larger standard 3D U-Net 512 by approximately 0.51 percentage points on the validation set. All comparisons are from individual training runs.
 
 The interpretation of these results is presented in Section 7.
 
@@ -393,11 +416,11 @@ The interpretation of these results is presented in Section 7.
 
 Across the completed baseline experiments, the standard 3D U-Net models achieved higher validation mean foreground Dice scores than the 2D architectures.
 
-The 3D U-Net 512 achieved the highest observed score of 0.9247, while the 3D U-Net 256 achieved 0.9226 with substantially fewer parameters.
+Among the five models, the Residual 3D U-Net 256 achieved the highest validation mean foreground Dice (0.9298). The standard 3D U-Net 512 achieved 0.9247, while the standard 3D U-Net 256 achieved 0.9226 with substantially fewer parameters than the 512-channel variant.
 
 These findings are consistent with the hypothesis that volumetric spatial context may improve anatomical segmentation. However, the experiments do not independently isolate spatial dimensionality from differences in parameter count and training procedures.
 
-Results from the residual architecture will provide a further comparison of architectural design choices within the 3D U-Net framework.
+The residual architecture improved validation Dice relative to both standard 3D models under the tested configuration, although further runs would be needed to establish the reliability of this difference.
 
 ## 7. Discussion and Limitations
 
@@ -433,9 +456,9 @@ The improved 256-channel model contains 15,194,278 trainable parameters, approxi
 
 Both models use the same dataset split, input patch dimensions, loss function, optimiser, sampling procedure, and validation method. This provides a relatively controlled comparison of the residual architecture against the standard 3D model.
 
-**[Insert final residual-model validation Dice and best epoch.]**
+The residual model achieved a best mean foreground validation Dice of 0.9298 at epoch 18, compared with 0.9226 at epoch 15 for the standard 3D U-Net 256. This is an increase of approximately 0.72 percentage points with a 1.5% increase in parameter count. It also exceeded the standard 3D U-Net 512 result of 0.9247.
 
-**[Compare the residual result with the standard 3D U-Net 256 Dice of 0.9226. Discuss whether residual connections improved the best observed validation accuracy, early convergence behaviour, or neither.]**
+The residual model reached 0.9197 validation Dice by epoch 8, compared with 0.9113 for standard 3D U-Net 256 at epoch 8. This suggests faster early improvement in validation Dice in this particular run, but it does not independently establish faster convergence in computation time or generalise to repeated runs.
 
 Any observed difference should be interpreted cautiously because only one training run was conducted for each architecture. Furthermore, the residual architecture introduces a small increase in trainable parameters, so any performance difference cannot be attributed exclusively to the shortcut connections.
 
@@ -447,7 +470,7 @@ The standard 2D U-Net 256 contains approximately 5.14 million trainable paramete
 
 The standard 3D U-Net 512 contains approximately 22.58 million parameters, making it the largest architecture evaluated in this project.
 
-Training the 3D models also required substantially more time under the implemented experimental setup. The 3D U-Net 256 generally required approximately 340–360 seconds per epoch, whereas the 2D U-Net 256 recorded approximately 1,136 seconds of total training time across its 20 epochs, excluding dataset preloading.
+Training the 3D models also required substantially more time under the implemented experimental setup. The 3D U-Net 256 recorded 6,565.2 seconds across 19 completed epochs, compared with 1,136.2 seconds for the 2D U-Net 256 across 20 epochs, excluding dataset preloading. The 3D U-Net 512 and residual 3D U-Net 256 required 6,571.5 and 7,498.3 seconds respectively across their completed 20-epoch runs.
 
 However, these runtime measurements are not directly comparable as isolated measures of computational efficiency. The 2D models were trained on individual slices, while the 3D models processed volumetric patches and performed full-volume sliding-window validation. Differences in data preparation, hardware execution, and validation workload also affect the measured times.
 
@@ -488,6 +511,16 @@ Second, the improved residual architecture could be extended to a 512-channel bo
 Third, different volumetric patch sizes and sampling strategies could be evaluated through controlled training experiments. This would help determine whether the greater anatomical coverage observed with 96³ patches translates into improved segmentation accuracy.
 
 Further investigations could also include anatomically appropriate MRI data augmentation, alternative loss functions for class imbalance, and optimisation of the data-loading pipeline to reduce computational overhead.
+
+## 8. Conclusion
+
+This project investigated whether using neighbouring MRI slices through a 3D U-Net improved multi-class anatomical segmentation over a conventional 2D U-Net, and whether residual convolution blocks provided an additional improvement.
+
+Both standard 3D variants achieved higher best mean foreground validation Dice than their corresponding 2D baselines. The 2D U-Net 256 scored 0.9131 compared with 0.9226 for the standard 3D U-Net 256, while the 2D U-Net 512 scored 0.9113 compared with 0.9247 for the standard 3D U-Net 512. These observations are consistent with the hypothesis that additional volumetric context can benefit segmentation, although the models also differ in parameter count and training procedure.
+
+The Residual 3D U-Net 256 achieved the highest validation Dice of 0.9298 at epoch 18, exceeding the standard 3D U-Net 256 by approximately 0.72 percentage points while adding only approximately 1.5% more parameters. Its prostate Dice was 0.8916, compared with 0.8373 for the 2D U-Net 256 best checkpoint. These results suggest a promising benefit from the tested residual 3D configuration, without establishing clinical significance or causation from individual design choices.
+
+These conclusions are limited to the validation cohort and one training run per model. A complete held-out test evaluation was not obtained, and the additional costs of volumetric training must be weighed against the observed gains. Future work could examine repeated seeds, external and held-out test datasets, and other patch sizes to assess whether the improvements generalise.
 
 ## 9. Artificial Intelligence Usage Disclosure
 
