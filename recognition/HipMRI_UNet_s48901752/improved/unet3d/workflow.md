@@ -1,7 +1,7 @@
 # Improved 3D U-Net — Residual Blocks (milestone D)
 
 Status: implemented and unit-tested on CPU. **Not trained. No results yet.**
-Project-level research question and hypothesis: see `architeture/workflow.md` (unchanged).
+Project-level research question and hypothesis: see [`docs/workflow.md`](../../docs/workflow.md) (unchanged).
 
 ## 1. Motivation and hypothesis
 
