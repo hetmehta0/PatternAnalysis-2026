@@ -80,7 +80,7 @@ The one-page review below is reproduced verbatim from the version prepared for t
 
 > **COMP3710 | Feasibility review**\
 > HipMRI 2D prostate segmentation - Improved U-Net vs standard U-Net\
-> Updated 21 October 2026. Status: real-data feasibility evidence; tutor check-off pending.
+> Updated 21 October 2026. Presented at the practical consultation; tutor check-off completed.
 >
 > **User need and scope.** An imaging specialist needs a prototype that drafts prostate contours for review. Compare normal-difficulty 2D Improved U-Net with standard 2D U-Net on the same held-out HipMRI patients. Investigate whether residual multi-scale features reduce difficult boundary errors, despite the absence of 3D continuity. This prototype is not approved for clinical use.
 >
@@ -651,7 +651,7 @@ python predict3d.py --checkpoint runs/resunet3d_256_p96_seed3710_e20/best.pt \
 
 ## 10. Artificial Intelligence Usage Disclosure
 
-**Tools used.** ChatGPT, OpenAI Codex and Claude.
+**Tools used.** ChatGPT, OpenAI Codex, GitHub Copilot and Claude.
 
 **What AI assisted with.**
 

@@ -1,6 +1,7 @@
 # Improved 3D U-Net — Residual Blocks (milestone D)
 
-Status: implemented and unit-tested on CPU. **Not trained. No results yet.**
+Status: trained for 20 epochs; best validation Dice 0.9298 at epoch 18 (see README §6.6).
+Held-out test evaluation (milestone E) was not completed.
 Project-level research question and hypothesis: see [`docs/workflow.md`](../../docs/workflow.md) (unchanged).
 
 ## 1. Motivation and hypothesis
