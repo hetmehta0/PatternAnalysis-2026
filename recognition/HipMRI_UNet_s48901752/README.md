@@ -604,7 +604,13 @@ pip install -r requirements.txt
 
 ### 9.2 Data
 
-The scans are the HipMRI 3D volumes on Rangpur (`/home/groups/comp3710/HipMRI_Study_open`, images in `semantic_MRs`, masks in `semantic_labels_only`). The scripts read a manifest CSV (`--metadata`) with one row per scan and the columns `patient_id`, `scan_id`, `image_path`, `mask_path` and `split`. The manifest is not committed. It was built with the patient-level procedure in Section 2.2, using a helper from my earlier feasibility-stage project that is not part of this folder. `dataset.load_manifest` rejects a manifest with patient overlap between splits, a split other than 26/6/6 patients, or a split SHA-256 other than `4da18222…7dd7886` (`dataset.EXPECTED_SPLIT_SHA256`).
+The scans are the HipMRI 3D volumes on Rangpur (`/home/groups/comp3710/HipMRI_Study_open`, images in `semantic_MRs`, masks in `semantic_labels_only`). The scripts read a manifest CSV (`--metadata`) with one row per scan and the columns `patient_id`, `scan_id`, `image_path`, `mask_path` and `split`. The manifest is not committed because it contains cluster paths. Build it with:
+
+```bash
+python make_manifest.py --data-root /path/to/HipMRI_Study_open --out metadata.csv
+```
+
+`make_manifest.py` pairs each `semantic_MRs/<scan>_LFOV.nii.gz` with `semantic_labels_only/<scan>_SEMANTIC.nii.gz`, takes the patient ID from the scan ID (`B040_Week3` → `B040`) and applies the patient-level split in Section 2.2 (`--seed`, default 3710). It then re-reads the CSV with `dataset.load_manifest` and prints the split SHA-256. `dataset.load_manifest` rejects a manifest with patient overlap between splits, a split other than 26/6/6 patients, or a split SHA-256 other than `4da18222…7dd7886` (`dataset.EXPECTED_SPLIT_SHA256`).
 
 ### 9.3 Tests
 
