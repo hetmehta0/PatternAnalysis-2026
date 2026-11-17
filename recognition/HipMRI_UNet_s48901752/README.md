@@ -1,5 +1,7 @@
 # HipMRI Anatomical Segmentation Using 2D and 3D U-Net Architectures
 
+**Author:** Het Mehta (s48901752)
+
 ## 1. Introduction
 
 ### 1.1 Background and Motivation
@@ -585,7 +587,7 @@ These conclusions are limited to the validation cohort and one training run per 
 
 ## 9. Usage and Reproducibility
 
-All commands are run from this folder (`recognition/HipMRI_UNet_hetmehta0/`).
+All commands are run from this folder (`recognition/HipMRI_UNet_s48901752/`).
 
 ### 9.1 Dependencies
 
